@@ -1,26 +1,207 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   VENJIX DESIGN SYSTEM — TAILWIND V4 CONFIGURATION
+   --------------------------------------------------------------------------
+   Product: VENJIX — A Multiverse Deepdive
+   Tagline: BEYOND THE BOUNDARIES OF REALITY.
+
+   Defines the definitive multiverse color palette, typography font stacks,
+   and custom animation keyframes for the monumental Gateway experience.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Typography Imports (Google Fonts)
+   Space Grotesk: Headings & monumental experimental display text.
+   Inter: Body copy, informational paragraphs, and secondary UI.
+   JetBrains Mono: Technical coordinates, telemetry telemetry, and HUD labels.
+   -------------------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Core Venjix Color Palette */
+  --color-void: #08070D;              /* Deepest cosmic void background */
+  --color-void-secondary: #100D18;    /* Secondary elevation layer */
+  --color-abyss: #171022;             /* Shadow planes & deep structural elements */
+  --color-electric-purple: #7136D9;   /* High-energy multiversal conduits & active states */
+  --color-luminous-lavender: #B69AFF; /* Luminous resonance aura & highlighted typography */
+  --color-starlight: #E9E2F5;         /* Primary high-contrast text & focal points */
+  --color-muted-text: #A49AAF;        /* Subordinate telemetry, labels, & metadata */
+  --color-borders: #30243F;           /* Subtle containment frames & modular grid lines */
+
+  /* Font Stacks with robust fallbacks */
+  --font-space-grotesk: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-jetbrains-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Default theme aliases */
+  --background: var(--color-void);
+  --foreground: var(--color-starlight);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@theme {
+  /* Color tokens available as bg-void, text-electric-purple, border-borders, etc. */
+  --color-void: #08070D;
+  --color-void-secondary: #100D18;
+  --color-abyss: #171022;
+  --color-electric-purple: #7136D9;
+  --color-luminous-lavender: #B69AFF;
+  --color-starlight: #E9E2F5;
+  --color-muted-text: #A49AAF;
+  --color-borders: #30243F;
+
+  /* Typography tokens */
+  --font-heading: var(--font-space-grotesk);
+  --font-body: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Base Body Setup */
+body {
+  background-color: var(--color-void);
+  color: var(--color-starlight);
+  font-family: var(--font-inter);
+  overflow-x: hidden;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==========================================================================
+   CUSTOM ANIMATION KEYFRAMES & UTILITIES
+   --------------------------------------------------------------------------
+   Hardware-accelerated CSS animations driving the orbital motion of the
+   Gateway rings, energetic pulses of the Artifact, and telemetry flicker.
+   ========================================================================== */
+
+/* Slow clockwise rotation for outer gateway resonance rings */
+@keyframes gateway-spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Counter-clockwise rotation for complementary geometric rings */
+@keyframes gateway-spin-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+/* Pulsating breath for the central artifact symbol and energy focal point */
+@keyframes artifact-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 18px rgba(113, 54, 217, 0.45)) drop-shadow(0 0 35px rgba(182, 154, 255, 0.25));
+  }
+  50% {
+    transform: scale(1.045);
+    filter: drop-shadow(0 0 32px rgba(113, 54, 217, 0.8)) drop-shadow(0 0 65px rgba(182, 154, 255, 0.5));
+  }
+}
+
+/* Subtle energetic shimmer for conduit lines and glowing borders */
+@keyframes energy-shimmer {
+  0% {
+    opacity: 0.35;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    opacity: 0.9;
+    stroke-dashoffset: 40;
+  }
+  100% {
+    opacity: 0.35;
+    stroke-dashoffset: 80;
+  }
+}
+
+/* Subtle telemetry status flicker to emulate live dimensional instrumentation */
+@keyframes telemetry-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Ambient vertical drift for dimensional coordinate grids */
+@keyframes grid-drift {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 40px;
+  }
+}
+
+/* Class-based animation hooks */
+.animate-gateway-slow {
+  animation: gateway-spin-slow 60s linear infinite;
+}
+
+.animate-gateway-medium {
+  animation: gateway-spin-reverse 42s linear infinite;
+}
+
+.animate-gateway-fast {
+  animation: gateway-spin-slow 24s linear infinite;
+}
+
+.animate-artifact-pulse {
+  animation: artifact-pulse 4.5s ease-in-out infinite;
+}
+
+.animate-energy-shimmer {
+  animation: energy-shimmer 3s ease-in-out infinite;
+}
+
+.animate-telemetry-blink {
+  animation: telemetry-blink 2.2s steps(2, start) infinite;
+}
+
+/* ==========================================================================
+   ATMOSPHERIC & PERSPECTIVE UTILITIES
+   --------------------------------------------------------------------------
+   Procedural grid patterns and perspective styling creating infinite depth.
+   ========================================================================== */
+
+/* Dimensional Vector Grid: Vanishing perspective ground plane */
+.dimensional-grid {
+  background-image: 
+    linear-gradient(to right, rgba(48, 36, 63, 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(48, 36, 63, 0.35) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 65% 55% at 50% 50%, black 15%, transparent 80%);
+}
+
+/* CRT Scanline & Grain texture for multiversal terminal atmosphere */
+.scanline-overlay {
+  background: linear-gradient(
+    rgba(18, 16, 26, 0) 50%, 
+    rgba(8, 7, 13, 0.28) 50%
+  );
+  background-size: 100% 3px;
+  pointer-events: none;
+}
+
+/* Glowing text drop shadow filters */
+.text-glow-purple {
+  text-shadow: 0 0 16px rgba(113, 54, 217, 0.65), 0 0 35px rgba(182, 154, 255, 0.35);
+}
+
+.text-glow-lavender {
+  text-shadow: 0 0 20px rgba(182, 154, 255, 0.8), 0 0 45px rgba(182, 154, 255, 0.4);
+}
+
+/* Radial portal energy glow */
+.portal-glow {
+  background: radial-gradient(circle, rgba(113, 54, 217, 0.28) 0%, rgba(23, 16, 34, 0.45) 45%, rgba(8, 7, 13, 0) 75%);
 }
