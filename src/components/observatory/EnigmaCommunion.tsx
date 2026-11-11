@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { RealityNode } from "./realityData";
+import {
+  MAX_CUSTOM_REALITIES,
+  RealityNode,
+} from "./realityData";
 import {
   EnigmaEcho,
   EnigmaTelemetry,
@@ -9,6 +12,7 @@ import {
   getDimensionProfile,
   synthesizeEnigmaResponse,
 } from "./enigmaEngine";
+import type { EnigmaActivityState } from "../gateway/AtmosphericCanvas";
 
 /**
  * ============================================================================
@@ -28,16 +32,31 @@ import {
 
 type EnigmaPhase = "listening" | "synthesizing" | "transmitting";
 
+export interface CrystallizeDivergencePayload {
+  hypothesis: string;
+  transmission: string;
+  telemetry: EnigmaTelemetry;
+  parentRealityId: string | null;
+}
+
 interface EnigmaCommunionProps {
   reality: RealityNode | null;
   isOpen: boolean;
   onClose: () => void;
+  onPhaseChange?: (state: EnigmaActivityState) => void;
+  onCrystallizeDivergence?: (payload: CrystallizeDivergencePayload) => void;
+  customNodeCount?: number;
+  maxCustomNodes?: number;
 }
 
 export default function EnigmaCommunion({
   reality,
   isOpen,
   onClose,
+  onPhaseChange,
+  onCrystallizeDivergence,
+  customNodeCount = 0,
+  maxCustomNodes = MAX_CUSTOM_REALITIES,
 }: EnigmaCommunionProps) {
   const initialProfile = getDimensionProfile(reality);
 
@@ -47,6 +66,7 @@ export default function EnigmaCommunion({
   );
   const [echoes, setEchoes] = useState<EnigmaEcho[]>([]);
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
+  const [isCustomHypothesis, setIsCustomHypothesis] = useState<boolean>(false);
   const [activeText, setActiveText] = useState<string>(
     initialProfile.openingTransmission
   );
@@ -170,6 +190,22 @@ export default function EnigmaCommunion({
 
   useEffect(() => clearTimers, [clearTimers]);
 
+  // Synchronize Enigma wavefunction activity upstream into WebGL2 shader uniforms
+  useEffect(() => {
+    const mappedState: EnigmaActivityState = !isOpen
+      ? "idle"
+      : phase === "listening"
+      ? "idle"
+      : phase;
+    onPhaseChange?.(mappedState);
+  }, [isOpen, phase, onPhaseChange]);
+
+  useEffect(() => {
+    return () => {
+      onPhaseChange?.("idle");
+    };
+  }, [onPhaseChange]);
+
   /**
    * Click-to-complete handler for active streamed inscription.
    */
@@ -207,6 +243,7 @@ export default function EnigmaCommunion({
       }
 
       setActiveQuery(trimmed);
+      setIsCustomHypothesis(!curatedResponse);
       setActiveText("");
       setRevealedChars(0);
       setPhase("synthesizing");
@@ -267,6 +304,33 @@ export default function EnigmaCommunion({
     clearTimers();
     onClose();
   };
+
+  const handleCrystallize = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (
+      !onCrystallizeDivergence ||
+      !activeQuery ||
+      !activeText ||
+      customNodeCount >= maxCustomNodes
+    ) {
+      return;
+    }
+    clearTimers();
+    onCrystallizeDivergence({
+      hypothesis: activeQuery,
+      transmission: activeText,
+      telemetry,
+      parentRealityId: reality?.id ?? null,
+    });
+  };
+
+  const canShowCrystallize =
+    Boolean(onCrystallizeDivergence) &&
+    isCustomHypothesis &&
+    Boolean(activeQuery) &&
+    phase === "listening" &&
+    activeText.length > 0;
+  const hasReachedCustomCap = customNodeCount >= maxCustomNodes;
 
   const accentColor = reality?.coreColor ?? "#C2B0FF";
   const secondaryColor = reality?.secondaryColor ?? "#0284C7";
@@ -615,6 +679,26 @@ export default function EnigmaCommunion({
               <span className="mt-1.5 block font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.22em] text-[#9F95B3]/65 uppercase">
                 [ CLICK TEXT TO RESOLVE STREAM ]
               </span>
+            )}
+
+            {canShowCrystallize && (
+              <div className="mt-3 pt-1 flex flex-wrap items-center gap-3">
+                {!hasReachedCustomCap ? (
+                  <button
+                    type="button"
+                    tabIndex={tabIndex}
+                    onClick={handleCrystallize}
+                    className="group relative inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-[#7136D9]/22 hover:bg-[#7136D9]/38 border border-[#C2B0FF]/45 hover:border-[#F6F3FE]/80 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.20em] text-[#F6F3FE] uppercase shadow-[0_0_20px_rgba(113,54,217,0.32)] hover:shadow-[0_0_28px_rgba(194,176,255,0.52)] transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] group-hover:bg-[#F6F3FE] animate-pulse shadow-[0_0_8px_#38BDF8]" />
+                    <span>[ + CRYSTALLIZE DIVERGENCE AS REALITY NODE ]</span>
+                  </button>
+                ) : (
+                  <span className="font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.20em] text-[#9F95B3]/70 uppercase">
+                    [ SESSION BRANCH LIMIT REACHED // {customNodeCount}/{maxCustomNodes} CUSTOM NODES ]
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>

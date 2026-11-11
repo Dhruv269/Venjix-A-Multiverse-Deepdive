@@ -32,6 +32,12 @@ import { CosmicSequenceState } from "./CosmicPhenomenon";
  *      dithering eliminating 8-bit banding across dark indigo gradients.
  */
 
+export type EnigmaActivityState = "idle" | "synthesizing" | "transmitting";
+
+export const DEFAULT_NEBULA_SPECTRUM: [number, number, number] = [
+  0.52, 0.24, 0.95,
+];
+
 interface AtmosphericCanvasProps {
   /** Interaction sequence stage to modulate celestial radiance */
   sequenceStage?: CosmicSequenceState;
@@ -43,6 +49,10 @@ interface AtmosphericCanvasProps {
   openingStage?: 1 | 2 | 3 | 4;
   /** Skips the initial 0.05 -> 1.0 environment ramp when already revealed */
   bypassOpening?: boolean;
+  /** Active spectral RGB tint (normalized 0.0-1.0) driven smoothly by hovered/selected reality */
+  activeSpectrum?: [number, number, number];
+  /** Live Enigma harmonic activity state boosting flow speed & plasma brightness on synthesis */
+  enigmaState?: EnigmaActivityState;
 }
 
 // ----------------------------------------------------------------------------
@@ -74,6 +84,8 @@ uniform vec2 u_mouse;
 uniform float u_reveal;
 uniform float u_observatory;
 uniform float u_warp;
+uniform vec3 u_spectralTint;
+uniform float u_activity;
 
 // --- High-Precision Smooth Value Noise in [0.0, 1.0] ---
 float hash(vec2 p) {
@@ -207,8 +219,9 @@ void main() {
   vec2 delta = pNebula - focal;
   float dist = length(delta);
 
-  // Smooth bell-shaped swirl rotation, intensifying gently during awakening pull
-  float swirlAngle = 1.15 * (1.0 + warp * 0.28) * exp(-dist * 1.35) * smoothstep(0.0, 0.24, dist);
+  // Smooth bell-shaped swirl rotation, intensifying gently during awakening pull & Enigma synthesis
+  float activity = clamp(u_activity, 0.0, 1.0);
+  float swirlAngle = 1.15 * (1.0 + warp * 0.28 + activity * 0.16) * exp(-dist * 1.35) * smoothstep(0.0, 0.24, dist);
   float s = sin(swirlAngle);
   float c = cos(swirlAngle);
   vec2 warpedP = focal + mat2(c, -s, s, c) * delta;
@@ -264,21 +277,29 @@ void main() {
   vec3 colCyan = vec3(0.010, 0.550, 0.880);     // #0284C7 Atmospheric Cyan Whisper
   vec3 colMagenta = vec3(0.780, 0.150, 0.660);  // #B8229C Restrained Magenta Tension
 
-  // --- 1. HDR EMISSION & INCANDESCENT PLASMA CRESTS (MAIN PHENOMENON) ---
+  // --- 1. HDR EMISSION, DYNAMIC SPECTRAL SHIFTING & INCANDESCENT PLASMA CRESTS ---
+  vec3 specNorm = clamp(u_spectralTint, vec3(0.02), vec3(1.0));
+  vec3 activeMidnight = mix(colMidnight, specNorm * 0.24, 0.65);
+  vec3 activePrimary = mix(colViolet, specNorm, 0.85);
+  vec3 activeHighlightBase = mix(specNorm, colWhite, 0.52);
+  vec3 activeLavender = mix(colLavender, activeHighlightBase, 0.72);
+
   float diffuseGas = smoothstep(0.12, 0.65, gas);
-  vec3 colGas = mix(colIndigo, colMidnight, smoothstep(0.0, 0.45, diffuseGas));
-  colGas = mix(colGas, colViolet, smoothstep(0.35, 0.85, diffuseGas));
+  vec3 colGas = mix(colIndigo, activeMidnight, smoothstep(0.0, 0.45, diffuseGas));
+  colGas = mix(colGas, activePrimary, smoothstep(0.35, 0.85, diffuseGas));
 
-  colGas = mix(colGas, colCyan, smoothstep(0.35, 0.80, length(q)) * 0.25);
-  colGas = mix(colGas, colMagenta, smoothstep(0.40, 0.85, length(r)) * 0.18);
+  colGas = mix(colGas, mix(colCyan, activeHighlightBase, 0.35), smoothstep(0.35, 0.80, length(q)) * 0.25);
+  colGas = mix(colGas, mix(colMagenta, activePrimary, 0.40), smoothstep(0.40, 0.85, length(r)) * 0.18);
 
-  // High-contrast HDR highlight sharpening for incandescent plasma crests (5.20x)
-  vec3 veinHighlight = mix(colLavender, colWhite, smoothstep(0.40, 0.92, plasmaVeins));
-  vec3 hdrCol = colGas * 1.80 + veinHighlight * pow(plasmaVeins, 1.45) * 5.20;
+  // High-contrast HDR highlight sharpening for incandescent plasma crests, surging on Enigma synthesis
+  vec3 veinHighlight = mix(activeLavender, colWhite, smoothstep(0.40, 0.92, plasmaVeins));
+  float veinContrast = mix(1.45, 1.24, activity);
+  float veinGain = 5.20 + activity * 2.55;
+  vec3 hdrCol = colGas * (1.80 + activity * 0.35) + veinHighlight * pow(plasmaVeins, veinContrast) * veinGain;
 
   // Ambient core presence around upper-right phenomenon
-  float coreGlow = smoothstep(0.20, 0.70, gas) * 0.85;
-  hdrCol += colViolet * coreGlow;
+  float coreGlow = smoothstep(0.20, 0.70, gas) * (0.85 + activity * 0.32);
+  hdrCol += activePrimary * coreGlow;
 
   // --- 2. PROCEDURAL MICRO-STAR CLUSTERS ALONG DUST EDGES (Nebular Nurseries) ---
   float starHash = fract(sin(dot(gl_FragCoord.xy + pNebula * 12.34, vec2(12.9898, 78.233))) * 43758.5453);
@@ -342,11 +363,13 @@ void main() {
   float leftHazeField = fbm(leftHazeCoord + 0.65 * hazeWarp);
   float leftMist = smoothstep(0.28, 0.78, leftHazeField);
 
-  // Map #0A0618 indigo whisper into 0.04–0.07 HDR contribution over the deep void
+  // Map #0A0618 indigo whisper into 0.04–0.07 HDR contribution over the deep void,
+  // allowing gentle spectral breathing only once entered into Observatory space.
   float baseReveal = min(u_reveal, 1.0);
   float indigoWeight = (0.38 + 0.62 * leftMist) * (1.0 - shieldStrength * 0.92);
   indigoWeight *= mix(1.0, 0.55, ctaShield * (1.0 - sanctuaryRelease));
-  vec3 leftVoidWhisperHdr = colIndigo * (indigoWeight * 0.95) * (0.85 + 0.15 * u_reveal) * baseReveal;
+  vec3 whisperTint = mix(colIndigo, specNorm * 0.095, obsMix * 0.42);
+  vec3 leftVoidWhisperHdr = whisperTint * (indigoWeight * 0.95) * (0.85 + 0.15 * u_reveal + activity * 0.20) * baseReveal;
 
   // Composite left indigo whisper + main cosmic phenomenon before filmic tonemapping
   vec3 combinedHdr = leftVoidWhisperHdr + hdrCol * voidMask;
@@ -409,15 +432,31 @@ export default function AtmosphericCanvas({
   warpProgress = 0,
   openingStage = 4,
   bypassOpening = false,
+  activeSpectrum = DEFAULT_NEBULA_SPECTRUM,
+  enigmaState = "idle",
 }: AtmosphericCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Keep sequenceStage, observatory mode, warp, and opening ramp accessible inside RAF loop
+  // Keep sequenceStage, observatory mode, warp, opening ramp, and spectral telemetry accessible inside RAF loop
   const stageRef = useRef<CosmicSequenceState>(sequenceStage);
   const observatoryRef = useRef<boolean>(isObservatoryActive);
   const observatoryMixRef = useRef<number>(isObservatoryActive ? 1 : 0);
   const warpTargetRef = useRef<number>(warpProgress);
   const warpMixRef = useRef<number>(warpProgress);
+  const spectrumTargetRef = useRef<[number, number, number]>(activeSpectrum);
+  const currentSpectrumRef = useRef<[number, number, number]>([
+    activeSpectrum[0],
+    activeSpectrum[1],
+    activeSpectrum[2],
+  ]);
+  const enigmaStateRef = useRef<EnigmaActivityState>(enigmaState);
+  const activityMixRef = useRef<number>(
+    enigmaState === "synthesizing"
+      ? 1.0
+      : enigmaState === "transmitting"
+      ? 0.42
+      : 0.0
+  );
   const openingElapsedRef = useRef<number>(
     bypassOpening || openingStage >= 4 ? 2.2 : 0
   );
@@ -437,6 +476,20 @@ export default function AtmosphericCanvas({
     warpTargetRef.current = Math.min(1, Math.max(0, warpProgress));
     drawCurrentStaticRef.current?.();
   }, [warpProgress]);
+
+  useEffect(() => {
+    spectrumTargetRef.current = [
+      activeSpectrum[0],
+      activeSpectrum[1],
+      activeSpectrum[2],
+    ];
+    drawCurrentStaticRef.current?.();
+  }, [activeSpectrum]);
+
+  useEffect(() => {
+    enigmaStateRef.current = enigmaState;
+    drawCurrentStaticRef.current?.();
+  }, [enigmaState]);
 
   useEffect(() => {
     if (bypassOpening) {
@@ -600,6 +653,8 @@ export default function AtmosphericCanvas({
     const uRevealLoc = gl.getUniformLocation(program, "u_reveal");
     const uObservatoryLoc = gl.getUniformLocation(program, "u_observatory");
     const uWarpLoc = gl.getUniformLocation(program, "u_warp");
+    const uSpectralTintLoc = gl.getUniformLocation(program, "u_spectralTint");
+    const uActivityLoc = gl.getUniformLocation(program, "u_activity");
 
     // ------------------------------------------------------------------------
     // DRAW FRAME
@@ -630,15 +685,33 @@ export default function AtmosphericCanvas({
       if (uRevealLoc) gl.uniform1f(uRevealLoc, reveal);
       if (uObservatoryLoc) gl.uniform1f(uObservatoryLoc, observatoryMixRef.current);
       if (uWarpLoc) gl.uniform1f(uWarpLoc, warpMixRef.current);
+      if (uSpectralTintLoc) {
+        const [r, g, b] = currentSpectrumRef.current;
+        gl.uniform3f(uSpectralTintLoc, r, g, b);
+      }
+      if (uActivityLoc) gl.uniform1f(uActivityLoc, activityMixRef.current);
 
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     };
 
+    const syncStaticTargets = () => {
+      openingElapsedRef.current = 2.2;
+      observatoryMixRef.current = observatoryRef.current ? 1 : 0;
+      warpMixRef.current = warpTargetRef.current;
+      currentSpectrumRef.current[0] = spectrumTargetRef.current[0];
+      currentSpectrumRef.current[1] = spectrumTargetRef.current[1];
+      currentSpectrumRef.current[2] = spectrumTargetRef.current[2];
+      activityMixRef.current =
+        enigmaStateRef.current === "synthesizing"
+          ? 1.0
+          : enigmaStateRef.current === "transmitting"
+          ? 0.42
+          : 0.0;
+    };
+
     drawCurrentStaticRef.current = () => {
       if (prefersReducedMotion) {
-        openingElapsedRef.current = 2.2;
-        observatoryMixRef.current = observatoryRef.current ? 1 : 0;
-        warpMixRef.current = warpTargetRef.current;
+        syncStaticTargets();
         drawFrame(18.0, 18.0);
       }
     };
@@ -663,9 +736,7 @@ export default function AtmosphericCanvas({
       }
 
       if (prefersReducedMotion) {
-        openingElapsedRef.current = 2.2;
-        observatoryMixRef.current = observatoryRef.current ? 1 : 0;
-        warpMixRef.current = warpTargetRef.current;
+        syncStaticTargets();
         drawFrame(18.0, 18.0);
       }
     };
@@ -701,8 +772,28 @@ export default function AtmosphericCanvas({
       observatoryMixRef.current +=
         (targetObs - observatoryMixRef.current) * (1 - Math.exp(-delta * 2.4));
 
+      // Smooth spectral hue & Enigma harmonic activity lerp (~0.03 per 60fps frame, zero snapping)
+      const spectralLerp = 1 - Math.pow(0.97, delta * 60);
+      const specTarget = spectrumTargetRef.current;
+      const specCurr = currentSpectrumRef.current;
+      specCurr[0] += (specTarget[0] - specCurr[0]) * spectralLerp;
+      specCurr[1] += (specTarget[1] - specCurr[1]) * spectralLerp;
+      specCurr[2] += (specTarget[2] - specCurr[2]) * spectralLerp;
+
+      const targetActivity =
+        enigmaStateRef.current === "synthesizing"
+          ? 1.0
+          : enigmaStateRef.current === "transmitting"
+          ? 0.42
+          : 0.0;
+      activityMixRef.current +=
+        (targetActivity - activityMixRef.current) * spectralLerp;
+
       // Monotonically integrate domain-warp flow velocity so fluid accelerates seamlessly
-      flowTime += delta * (1.0 + warpMixRef.current * 1.45);
+      // during awakening warp & Enigma synthesis
+      flowTime +=
+        delta *
+        (1.0 + warpMixRef.current * 1.45 + activityMixRef.current * 1.65);
 
       drawFrame(globalTime, flowTime);
 

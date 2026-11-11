@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   REALITY_NODES,
   SYNAPTIC_LINKS,
   RealityNode,
+  SynapticLink,
   getConnectedNodeIds,
 } from "./realityData";
 
@@ -14,14 +15,18 @@ import {
  * ============================================================================
  * Renders the living Multiverse Network inside the Cosmic Observatory:
  * - Curved SVG Cubic Bezier synaptic threads with flowing starlight packets.
- * - 5 staggered-phase Living Reality Orbs with breathing coronas, razor-thin
- *   orbital rings, incandescent spectral cores, and floating whisper labels.
+ * - Living Reality Orbs (5 foundational + user-crystallized divergences) with
+ *   breathing coronas, razor-thin orbital rings, incandescent spectral cores,
+ *   and floating whisper labels.
  * - Smooth spring-damped cursor parallax across deep space.
  */
 
 interface RealityConstellationProps {
+  nodes?: RealityNode[];
+  links?: SynapticLink[];
   selectedId: string | null;
   hoveredId: string | null;
+  newlyBornId?: string | null;
   onSelect: (realityId: string) => void;
   onHover: (realityId: string | null) => void;
   isInteractive: boolean;
@@ -46,23 +51,27 @@ function buildCubicSynapticPath(
   return `M ${source.x.toFixed(1)},${source.y.toFixed(1)} C ${cx1.toFixed(1)},${cy1.toFixed(1)} ${cx2.toFixed(1)},${cy2.toFixed(1)} ${target.x.toFixed(1)},${target.y.toFixed(1)}`;
 }
 
-const NODE_LOOKUP: Record<string, RealityNode> = Object.fromEntries(
-  REALITY_NODES.map((node) => [node.id, node])
-);
-
 export default function RealityConstellation({
+  nodes = REALITY_NODES,
+  links = SYNAPTIC_LINKS,
   selectedId,
   hoveredId,
+  newlyBornId = null,
   onSelect,
   onHover,
   isInteractive,
 }: RealityConstellationProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
 
+  const nodeLookup = useMemo(
+    () => Object.fromEntries(nodes.map((node) => [node.id, node])),
+    [nodes]
+  );
+
   // Determine spatial focus node (hover preview takes priority over selection, or combines cleanly)
   const activeFocusId = hoveredId ?? selectedId;
   const connectedSet = activeFocusId
-    ? getConnectedNodeIds(activeFocusId)
+    ? getConnectedNodeIds(activeFocusId, links)
     : null;
 
   /**
@@ -198,9 +207,9 @@ export default function RealityConstellation({
             </linearGradient>
           </defs>
 
-          {SYNAPTIC_LINKS.map((link) => {
-            const source = NODE_LOOKUP[link.sourceId];
-            const target = NODE_LOOKUP[link.targetId];
+          {links.map((link) => {
+            const source = nodeLookup[link.sourceId];
+            const target = nodeLookup[link.targetId];
             if (!source || !target) return null;
 
             const pathD = buildCubicSynapticPath(source, target, link.curveOffset);
@@ -258,11 +267,12 @@ export default function RealityConstellation({
           })}
         </svg>
 
-        {/* LAYER B: 5 LIVING REALITY ORBS */}
-        {REALITY_NODES.map((node) => {
+        {/* LAYER B: LIVING REALITY ORBS (BUILT-IN + USER-CRYSTALLIZED) */}
+        {nodes.map((node) => {
           const isSelected = selectedId === node.id;
           const isHovered = hoveredId === node.id;
-          const isHighlighted = isSelected || isHovered;
+          const isNewlyBorn = newlyBornId === node.id;
+          const isHighlighted = isSelected || isHovered || isNewlyBorn;
           const isConnectedNeighbor =
             connectedSet !== null && connectedSet.has(node.id) && !isHighlighted;
           const isDimmed = connectedSet !== null && !connectedSet.has(node.id);
@@ -317,6 +327,15 @@ export default function RealityConstellation({
                   }
                   className="orb-corona pointer-events-none absolute -inset-4 sm:-inset-5 rounded-full blur-md transition-transform duration-700 group-hover:scale-125"
                 />
+
+                {/* Genesis Shockwave Pulse when freshly crystallized by user */}
+                {isNewlyBorn && (
+                  <span
+                    aria-hidden="true"
+                    style={{ borderColor: node.coreColor }}
+                    className="pointer-events-none absolute -inset-3 rounded-full border-2 opacity-75 animate-ping motion-reduce:hidden"
+                  />
+                )}
 
                 {/* Layer 2: Razor-Thin Rotating Dashed Orbital Ring */}
                 <span

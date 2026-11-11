@@ -10,6 +10,14 @@
  * clear top margin for ObservatoryNavbar and bottom margin for telemetry.
  */
 
+export const MAX_CUSTOM_REALITIES = 3;
+export const CUSTOM_REALITIES_STORAGE_KEY = "venjix_custom_realities_v1";
+
+/** Default signature Electric Violet/Lavender normalized RGB for Gateway & neutral Observatory */
+export const DEFAULT_OBSERVATORY_SPECTRUM: [number, number, number] = [
+  0.52, 0.24, 0.95,
+];
+
 export interface RealityNode {
   id: string;
   code: string;
@@ -21,6 +29,8 @@ export interface RealityNode {
   coreColor: string;
   secondaryColor: string;
   auraColor: string;
+  /** Normalized RGB 0.0-1.0 fed smoothly into WebGL2 u_spectralTint uniform */
+  spectrum: [number, number, number];
   x: number; // 0..1000 normalized X
   y: number; // 0..620 normalized Y
   parallaxDepth: number;
@@ -34,6 +44,8 @@ export interface RealityNode {
   };
   synopsis: string;
   enigmaTransmission: string;
+  isCustom?: boolean;
+  parentNodeId?: string;
 }
 
 export interface SynapticLink {
@@ -57,6 +69,7 @@ export const REALITY_NODES: RealityNode[] = [
     coreColor: "#C2B0FF",
     secondaryColor: "#7136D9",
     auraColor: "rgba(194, 176, 255, 0.52)",
+    spectrum: [0.76, 0.62, 1.0],
     x: 225,
     y: 218,
     parallaxDepth: 0.9,
@@ -84,6 +97,7 @@ export const REALITY_NODES: RealityNode[] = [
     coreColor: "#0284C7",
     secondaryColor: "#7DD3FC",
     auraColor: "rgba(2, 132, 199, 0.50)",
+    spectrum: [0.06, 0.58, 0.92],
     x: 715,
     y: 176,
     parallaxDepth: 1.15,
@@ -111,6 +125,7 @@ export const REALITY_NODES: RealityNode[] = [
     coreColor: "#7136D9",
     secondaryColor: "#C2B0FF",
     auraColor: "rgba(113, 54, 217, 0.58)",
+    spectrum: [0.42, 0.14, 0.88],
     x: 492,
     y: 304,
     parallaxDepth: 1.3,
@@ -138,6 +153,7 @@ export const REALITY_NODES: RealityNode[] = [
     coreColor: "#F6F3FE",
     secondaryColor: "#C2B0FF",
     auraColor: "rgba(246, 243, 254, 0.56)",
+    spectrum: [0.92, 0.86, 1.0],
     x: 774,
     y: 424,
     parallaxDepth: 0.85,
@@ -165,6 +181,7 @@ export const REALITY_NODES: RealityNode[] = [
     coreColor: "#A78BFA",
     secondaryColor: "#0284C7",
     auraColor: "rgba(167, 139, 250, 0.50)",
+    spectrum: [0.46, 0.44, 0.98],
     x: 266,
     y: 432,
     parallaxDepth: 1.05,
@@ -242,12 +259,202 @@ export const SYNAPTIC_LINKS: SynapticLink[] = [
   },
 ];
 
-export function getConnectedNodeIds(nodeId: string): Set<string> {
+export function getConnectedNodeIds(
+  nodeId: string,
+  links: SynapticLink[] = SYNAPTIC_LINKS
+): Set<string> {
   const connected = new Set<string>([nodeId]);
-  for (const link of SYNAPTIC_LINKS) {
+  for (const link of links) {
     if (link.sourceId === nodeId) connected.add(link.targetId);
     if (link.targetId === nodeId) connected.add(link.sourceId);
   }
   return connected;
+}
+
+interface CustomPaletteSlot {
+  coreColor: string;
+  secondaryColor: string;
+  auraColor: string;
+  spectrum: [number, number, number];
+}
+
+const CUSTOM_PALETTE_SLOTS: CustomPaletteSlot[] = [
+  {
+    coreColor: "#38BDF8",
+    secondaryColor: "#7136D9",
+    auraColor: "rgba(56, 189, 248, 0.54)",
+    spectrum: [0.22, 0.72, 0.98],
+  },
+  {
+    coreColor: "#E879F9",
+    secondaryColor: "#7136D9",
+    auraColor: "rgba(232, 121, 249, 0.52)",
+    spectrum: [0.84, 0.34, 0.94],
+  },
+  {
+    coreColor: "#7DD3FC",
+    secondaryColor: "#C2B0FF",
+    auraColor: "rgba(125, 211, 252, 0.54)",
+    spectrum: [0.54, 0.8, 1.0],
+  },
+];
+
+/** Curated organic open-space anchors inside 1000x620 orbital stage */
+const ORBITAL_ANCHOR_SLOTS: Array<{ x: number; y: number }> = [
+  { x: 468, y: 136 },
+  { x: 134, y: 336 },
+  { x: 526, y: 470 },
+  { x: 866, y: 274 },
+  { x: 356, y: 162 },
+  { x: 642, y: 464 },
+];
+
+function deriveBranchTitle(hypothesis: string, indexNum: number): string {
+  const stripped = hypothesis
+    .trim()
+    .replace(/^(what if|suppose|imagine if|could|what happens if)\s+/i, "")
+    .replace(/[?.!]+$/g, "")
+    .trim();
+
+  if (!stripped) return `Crystallized Branch 0${indexNum}`;
+
+  const words = stripped.split(/\s+/).filter(Boolean);
+  const titleWords: string[] = [];
+  let charCount = 0;
+
+  for (const w of words) {
+    const clean = w.charAt(0).toUpperCase() + w.slice(1);
+    if (charCount + clean.length + 1 > 30 && titleWords.length > 0) break;
+    titleWords.push(clean);
+    charCount += clean.length + 1;
+  }
+
+  const joined = titleWords.join(" ");
+  return joined.length < stripped.length ? `${joined}…` : joined;
+}
+
+function deriveHypothesisEssence(hypothesis: string): string {
+  const q = hypothesis.toLowerCase();
+  if (/time|past|future|history|age|timeline/.test(q)) {
+    return "Forked chronological causal stream";
+  }
+  if (/entropy|physics|gravity|light|quantum|star|energy/.test(q)) {
+    return "Altered continuum field constants";
+  }
+  if (/mind|conscious|memory|dream|self|life|human/.test(q)) {
+    return "Recursive observer phase divergence";
+  }
+  if (/collaps|end|war|destroy|break/.test(q)) {
+    return "Fractured equilibrium bifurcation";
+  }
+  return "Crystallized observer hypothesis horizon";
+}
+
+function selectOrganicCoordinate(
+  parentNode: RealityNode,
+  existingNodes: RealityNode[]
+): { x: number; y: number } {
+  const MIN_CLEARANCE = 116;
+
+  // Score candidate open anchors: must maintain safe clearance from all orbs, preferring proximity to parent
+  const validCandidates = ORBITAL_ANCHOR_SLOTS.filter((slot) =>
+    existingNodes.every(
+      (n) => Math.hypot(n.x - slot.x, n.y - slot.y) >= MIN_CLEARANCE
+    )
+  ).sort(
+    (a, b) =>
+      Math.hypot(a.x - parentNode.x, a.y - parentNode.y) -
+      Math.hypot(b.x - parentNode.x, b.y - parentNode.y)
+  );
+
+  if (validCandidates.length > 0) {
+    return validCandidates[0];
+  }
+
+  // Fallback safe spiral around parent inside safe canvas bounds [115..885] x [115..510]
+  for (let step = 0; step < 12; step++) {
+    const angle = (step / 12) * Math.PI * 2;
+    const x = Math.max(
+      115,
+      Math.min(885, Math.round(parentNode.x + Math.cos(angle) * 155))
+    );
+    const y = Math.max(
+      115,
+      Math.min(510, Math.round(parentNode.y + Math.sin(angle) * 130))
+    );
+    const clear = existingNodes.every((n) => Math.hypot(n.x - x, n.y - y) >= 95);
+    if (clear) return { x, y };
+  }
+
+  return { x: 468, y: 136 };
+}
+
+export interface CustomRealitySynthesisInput {
+  hypothesis: string;
+  transmission: string;
+  telemetry: {
+    temporalCoherence: string;
+    entropyDelta: string;
+    divergenceProbability: string;
+  };
+  parentReality: RealityNode | null;
+  existingNodes: RealityNode[];
+  customIndex: number; // 1-based (1..3)
+}
+
+export function synthesizeCustomRealityNode(
+  input: CustomRealitySynthesisInput
+): { node: RealityNode; link: SynapticLink } {
+  const slotNum = Math.max(1, Math.min(MAX_CUSTOM_REALITIES, input.customIndex));
+  const code = `USER-0${slotNum}`;
+  const parent =
+    input.parentReality ??
+    input.existingNodes.find((n) => n.id === "null-09") ??
+    input.existingNodes[0];
+
+  const coords = selectOrganicCoordinate(parent, input.existingNodes);
+  const palette = CUSTOM_PALETTE_SLOTS[(slotNum - 1) % CUSTOM_PALETTE_SLOTS.length];
+  const id = `user-0${slotNum}-${Date.now().toString(36)}`;
+  const cleanHypothesis = input.hypothesis.trim();
+
+  const node: RealityNode = {
+    id,
+    code,
+    category: "CUSTOM DIVERGENCE",
+    classification: `${code} // CUSTOM DIVERGENCE`,
+    title: deriveBranchTitle(cleanHypothesis, slotNum),
+    essence: deriveHypothesisEssence(cleanHypothesis),
+    divergence: input.telemetry.divergenceProbability,
+    coreColor: palette.coreColor,
+    secondaryColor: palette.secondaryColor,
+    auraColor: palette.auraColor,
+    spectrum: palette.spectrum,
+    x: coords.x,
+    y: coords.y,
+    parallaxDepth: 0.95 + (slotNum % 3) * 0.14,
+    pulseDelaySec: 0.4 * slotNum,
+    orbitDurationSec: 19 + slotNum * 2,
+    labelPlacement: coords.y > 460 ? "top" : "bottom",
+    telemetry: {
+      entropyIndex: input.telemetry.entropyDelta.replace(/\s*ΔS$/i, " ΔS"),
+      temporalDrift: `+${(slotNum * 11.4 + 3.2).toFixed(2)} τ`,
+      resonanceStability: input.telemetry.temporalCoherence,
+    },
+    synopsis: `Crystallized directly from observer inquiry ("${cleanHypothesis}") branching along synaptic tension from ${parent.code}. ${input.transmission}`,
+    enigmaTransmission: `OBSERVER BRANCH ${code} CRYSTALLIZED // PHASE-LOCKED TO ${parent.code}...`,
+    isCustom: true,
+    parentNodeId: parent.id,
+  };
+
+  const link: SynapticLink = {
+    id: `link-${parent.id}-${id}`,
+    sourceId: parent.id,
+    targetId: id,
+    curveOffset: slotNum % 2 === 0 ? 38 : -38,
+    pulseDurationSec: 4.4,
+    pulseDelaySec: 0.3,
+  };
+
+  return { node, link };
 }
 

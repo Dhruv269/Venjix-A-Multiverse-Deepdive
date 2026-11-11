@@ -302,9 +302,60 @@ const DIMENSION_PROFILES: Record<string, DimensionProfile> = {
   },
 };
 
+function buildCustomDimensionProfile(reality: RealityNode): DimensionProfile {
+  return {
+    openingTransmission: `Observer-crystallized manifold ${reality.code} (“${reality.title}”) stands in harmonic phase lock. Anchored around ${reality.essence.toLowerCase()}, its divergence trace pulses at ${reality.divergence}. Inquire further into this newly manifested reality.`,
+    initialTelemetry: {
+      temporalCoherence: reality.telemetry.resonanceStability,
+      entropyDelta: reality.telemetry.entropyIndex,
+      divergenceProbability: reality.divergence,
+    },
+    probes: [
+      {
+        id: `${reality.id}-p1`,
+        label: "Trace causal stability along this crystallized branch",
+        transmission: `Harmonic telemetry across ${reality.code} stabilizes cleanly around ${reality.telemetry.resonanceStability}. Although newly born from observer hypothesis, gravitational anchoring along its parent thread keeps boundary shear minimal as standing light waves settle into persistent structure.`,
+        telemetry: {
+          temporalCoherence: reality.telemetry.resonanceStability,
+          entropyDelta: reality.telemetry.entropyIndex,
+          divergenceProbability: reality.divergence,
+        },
+      },
+      {
+        id: `${reality.id}-p2`,
+        label: "Inspect entropy feedback with parent manifold",
+        transmission: `Synaptic conductivity between ${reality.code} and ${
+          reality.parentNodeId ? reality.parentNodeId.toUpperCase() : "the Nexus core"
+        } registers at ${reality.telemetry.entropyIndex}. Photonic energy cycles fluidly across the nascent bridge, harmonizing newly inscribed boundary constants with the wider constellation.`,
+        telemetry: {
+          temporalCoherence: "95.8%",
+          entropyDelta: reality.telemetry.entropyIndex,
+          divergenceProbability: reality.divergence,
+        },
+      },
+      {
+        id: `${reality.id}-p3`,
+        label: "Test whether this divergence can seed secondary echoes",
+        transmission: `Every crystallized manifold acquires its own counterfactual gravity once illuminated. Prolonged inquiry inside ${reality.code} sends subtle phase harmonics vibrating across neighboring hubs—capable of awakening secondary filaments should your hypothesis deepen.`,
+        telemetry: {
+          temporalCoherence: "97.2%",
+          entropyDelta: "+0.112 ΔS",
+          divergenceProbability: reality.divergence,
+        },
+      },
+    ],
+  };
+}
+
 export function getDimensionProfile(reality: RealityNode | null): DimensionProfile {
   if (!reality) return DIMENSION_PROFILES.global;
-  return DIMENSION_PROFILES[reality.id] ?? DIMENSION_PROFILES.global;
+  if (DIMENSION_PROFILES[reality.id]) {
+    return DIMENSION_PROFILES[reality.id];
+  }
+  if (reality.isCustom) {
+    return buildCustomDimensionProfile(reality);
+  }
+  return DIMENSION_PROFILES.global;
 }
 
 function hashQuerySeed(input: string): number {

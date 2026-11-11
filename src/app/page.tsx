@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import AtmosphericCanvas from "@/components/gateway/AtmosphericCanvas";
+import AtmosphericCanvas, {
+  DEFAULT_NEBULA_SPECTRUM,
+  EnigmaActivityState,
+} from "@/components/gateway/AtmosphericCanvas";
 import { CosmicSequenceState } from "@/components/gateway/CosmicPhenomenon";
 import TelemetryHUD from "@/components/gateway/TelemetryHUD";
 import InitiateContactButton from "@/components/gateway/InitiateContactButton";
@@ -38,6 +41,11 @@ export default function VenjixCosmicGatewayPage() {
   const [isObservatoryActive, setIsObservatoryActive] = useState<boolean>(false);
   // Resets internal button state cleanly when returning from the Observatory
   const [gatewayResetKey, setGatewayResetKey] = useState<number>(0);
+  // Dynamic spectral RGB & Enigma harmonic activity driven by Observatory interactions
+  const [activeSpectrum, setActiveSpectrum] = useState<[number, number, number]>(
+    DEFAULT_NEBULA_SPECTRUM
+  );
+  const [enigmaState, setEnigmaState] = useState<EnigmaActivityState>("idle");
 
   // 4-Stage progressive Gateway opening state (Rules 20 & 21)
   const [openingStage, setOpeningStage] = useState<1 | 2 | 3 | 4>(1);
@@ -109,6 +117,8 @@ export default function VenjixCosmicGatewayPage() {
     setIsObservatoryActive(false);
     setSequenceStage("idle");
     setWarpProgress(0);
+    setActiveSpectrum(DEFAULT_NEBULA_SPECTRUM);
+    setEnigmaState("idle");
     setBypassOpening(true);
     setOpeningStage(4);
     setGatewayResetKey((prev) => prev + 1);
@@ -135,6 +145,10 @@ export default function VenjixCosmicGatewayPage() {
         warpProgress={isObservatoryActive ? 1 : warpProgress}
         openingStage={openingStage}
         bypassOpening={bypassOpening}
+        activeSpectrum={
+          isObservatoryActive ? activeSpectrum : DEFAULT_NEBULA_SPECTRUM
+        }
+        enigmaState={isObservatoryActive ? enigmaState : "idle"}
       />
       <div
         aria-hidden="true"
@@ -249,6 +263,8 @@ export default function VenjixCosmicGatewayPage() {
       <CosmicObservatory
         isActive={isObservatoryActive}
         onExitGateway={handleExitObservatory}
+        onSpectrumChange={setActiveSpectrum}
+        onEnigmaStateChange={setEnigmaState}
       />
     </main>
   );

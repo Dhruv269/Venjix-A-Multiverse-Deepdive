@@ -1,7 +1,13 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { REALITY_NODES, RealityNode, getConnectedNodeIds } from "./realityData";
+import React, { useEffect, useMemo } from "react";
+import {
+  REALITY_NODES,
+  SYNAPTIC_LINKS,
+  RealityNode,
+  SynapticLink,
+  getConnectedNodeIds,
+} from "./realityData";
 
 /**
  * ============================================================================
@@ -18,24 +24,29 @@ import { REALITY_NODES, RealityNode, getConnectedNodeIds } from "./realityData";
 
 interface RealityInspectorProps {
   reality: RealityNode | null;
+  allNodes?: RealityNode[];
+  allLinks?: SynapticLink[];
   onClose: () => void;
   onSelectReality: (realityId: string) => void;
   onCommune: () => void;
   isObservatoryActive: boolean;
 }
 
-const NODE_BY_ID: Record<string, RealityNode> = Object.fromEntries(
-  REALITY_NODES.map((node) => [node.id, node])
-);
-
 export default function RealityInspector({
   reality,
+  allNodes = REALITY_NODES,
+  allLinks = SYNAPTIC_LINKS,
   onClose,
   onSelectReality,
   onCommune,
   isObservatoryActive,
 }: RealityInspectorProps) {
   const isVisible = Boolean(reality) && isObservatoryActive;
+
+  const nodeById = useMemo(
+    () => Object.fromEntries(allNodes.map((node) => [node.id, node])),
+    [allNodes]
+  );
 
   // Close deep-dive inspector cleanly on Escape key while active
   useEffect(() => {
@@ -54,9 +65,9 @@ export default function RealityInspector({
   const tabIndex = isVisible ? 0 : -1;
 
   const connectedPeers = reality
-    ? Array.from(getConnectedNodeIds(reality.id))
+    ? Array.from(getConnectedNodeIds(reality.id, allLinks))
         .filter((id) => id !== reality.id)
-        .map((id) => NODE_BY_ID[id])
+        .map((id) => nodeById[id])
         .filter(Boolean)
     : [];
 

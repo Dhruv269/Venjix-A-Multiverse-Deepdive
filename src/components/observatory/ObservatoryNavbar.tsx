@@ -2,7 +2,7 @@
 
 import React from "react";
 import ArtifactSymbol from "@/components/gateway/ArtifactSymbol";
-import { REALITY_NODES } from "./realityData";
+import { REALITY_NODES, RealityNode } from "./realityData";
 
 /**
  * ============================================================================
@@ -18,6 +18,8 @@ import { REALITY_NODES } from "./realityData";
  */
 
 interface ObservatoryNavbarProps {
+  /** Combined built-in and user-crystallized reality nodes */
+  nodes?: RealityNode[];
   /** Currently inspected reality ID, or null when viewing the full constellation */
   selectedRealityId: string | null;
   /** Selects a reality node (or passes null to return to overview) */
@@ -35,6 +37,7 @@ interface ObservatoryNavbarProps {
 }
 
 export default function ObservatoryNavbar({
+  nodes = REALITY_NODES,
   selectedRealityId,
   onSelectReality,
   onHoverReality,
@@ -78,14 +81,14 @@ export default function ObservatoryNavbar({
         </button>
 
         {/* Desktop Constellation Network & Reality Quick-Switch Links */}
-        <div className="hidden md:flex items-center gap-1">
+        <div className="hidden md:flex items-center gap-0.5 lg:gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
             tabIndex={tabIndex}
             onClick={() => onSelectReality(null)}
             onMouseEnter={() => onHoverReality?.(null)}
             aria-current={selectedRealityId === null ? "page" : undefined}
-            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full font-[family-name:var(--font-jetbrains-mono)] text-[9px] lg:text-[10px] tracking-[0.20em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/60 ${
+            className={`relative shrink-0 flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-full font-[family-name:var(--font-jetbrains-mono)] text-[9px] lg:text-[10px] tracking-[0.18em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/60 ${
               selectedRealityId === null
                 ? "bg-[#7136D9]/25 text-[#F6F3FE] border border-[#C2B0FF]/45 shadow-[0_0_16px_rgba(113,54,217,0.32)]"
                 : "text-[#9F95B3]/80 hover:text-[#F6F3FE] hover:bg-[#160C33]/40 border border-transparent"
@@ -103,10 +106,10 @@ export default function ObservatoryNavbar({
 
           <span
             aria-hidden="true"
-            className="mx-1 h-3 w-px bg-[#C2B0FF]/15"
+            className="mx-1 h-3 w-px shrink-0 bg-[#C2B0FF]/15"
           />
 
-          {REALITY_NODES.map((node) => {
+          {nodes.map((node) => {
             const isSelected = selectedRealityId === node.id;
             return (
               <button
@@ -119,7 +122,7 @@ export default function ObservatoryNavbar({
                 onMouseEnter={() => onHoverReality?.(node.id)}
                 onMouseLeave={() => onHoverReality?.(null)}
                 aria-current={isSelected ? "page" : undefined}
-                className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-full font-[family-name:var(--font-jetbrains-mono)] text-[9px] lg:text-[10px] tracking-[0.16em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/60 ${
+                className={`relative shrink-0 flex items-center gap-1.5 px-2 lg:px-2.5 py-1.5 rounded-full font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.14em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/60 ${
                   isSelected
                     ? "bg-[#7136D9]/28 text-[#FFFFFF] border border-[#C2B0FF]/45 shadow-[0_0_16px_rgba(194,176,255,0.28)]"
                     : "text-[#9F95B3]/80 hover:text-[#F6F3FE] hover:bg-[#160C33]/40 border border-transparent"
@@ -141,7 +144,7 @@ export default function ObservatoryNavbar({
         <div className="shrink-0 flex items-center gap-2 sm:gap-2.5">
           <div className="hidden xl:flex items-center gap-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.22em] text-[#C2B0FF]/80 uppercase">
             <span className="w-1.5 h-1.5 rounded-full bg-[#C2B0FF] animate-pulse shadow-[0_0_8px_#C2B0FF]" />
-            <span>5 REALITIES</span>
+            <span>{nodes.length} REALITIES</span>
           </div>
 
           {onOpenEnigma && (
@@ -186,7 +189,7 @@ export default function ObservatoryNavbar({
         >
           NETWORK
         </button>
-        {REALITY_NODES.map((node) => {
+        {nodes.map((node) => {
           const isSelected = selectedRealityId === node.id;
           return (
             <button
