@@ -4,18 +4,21 @@ import React, { useState, useCallback } from "react";
 import ObservatoryNavbar from "./ObservatoryNavbar";
 import RealityConstellation from "./RealityConstellation";
 import RealityInspector from "./RealityInspector";
+import EnigmaCommunion from "./EnigmaCommunion";
 import { REALITY_NODES } from "./realityData";
 
 /**
  * ============================================================================
  * COMPONENT: CosmicObservatory
  * ============================================================================
- * MILESTONE 2 (STEP 2): Living Reality Orbs, Synaptic Threads & Spatial Deep-Dive
+ * MILESTONE 2 (STEP 2) + MILESTONE 3 (STEP 1):
+ * Living Reality Orbs, Synaptic Threads, Deep-Dive Inspection & Enigma Communion
  *
  * Coordinates the interactive Multiverse Network suspended in deep space:
- * - Floating translucent navigation bar with quick reality switching.
+ * - Floating translucent navigation bar with quick reality switching & Enigma entry.
  * - Full-viewport organic SVG constellation connecting 5 Alternate Realities.
  * - Right-sanctuary border-minimal Reality Deep-Dive inspection overlay.
+ * - Full-screen Harmonic Singularity Communion interface ("The Enigma").
  */
 
 interface CosmicObservatoryProps {
@@ -33,6 +36,7 @@ export default function CosmicObservatory({
     null
   );
   const [hoveredRealityId, setHoveredRealityId] = useState<string | null>(null);
+  const [isEnigmaOpen, setIsEnigmaOpen] = useState<boolean>(false);
 
   const selectedReality =
     REALITY_NODES.find((node) => node.id === selectedRealityId) ?? null;
@@ -51,11 +55,26 @@ export default function CosmicObservatory({
     setSelectedRealityId(null);
   }, []);
 
+  const handleOpenEnigma = useCallback(() => {
+    setIsEnigmaOpen(true);
+  }, []);
+
+  const handleToggleEnigma = useCallback(() => {
+    setIsEnigmaOpen((prev) => !prev);
+  }, []);
+
+  const handleCloseEnigma = useCallback(() => {
+    setIsEnigmaOpen(false);
+  }, []);
+
   const handleExit = useCallback(() => {
+    setIsEnigmaOpen(false);
     setSelectedRealityId(null);
     setHoveredRealityId(null);
     onExitGateway();
   }, [onExitGateway]);
+
+  const isObservatoryLayerInteractive = isActive && !isEnigmaOpen;
 
   return (
     <section
@@ -73,18 +92,24 @@ export default function CosmicObservatory({
         selectedRealityId={selectedRealityId}
         onSelectReality={handleToggleSelectReality}
         onHoverReality={setHoveredRealityId}
+        onOpenEnigma={handleToggleEnigma}
+        isEnigmaOpen={isEnigmaOpen}
         onExitGateway={handleExit}
-        isInteractive={isActive}
+        isInteractive={isObservatoryLayerInteractive}
       />
 
       {/* Interactive Multiverse Network Stage */}
-      <div className="relative flex-1 w-full flex flex-col items-center justify-center px-4 sm:px-8 overflow-visible">
+      <div
+        className={`relative flex-1 w-full flex flex-col items-center justify-center px-4 sm:px-8 overflow-visible transition-opacity duration-700 ${
+          isEnigmaOpen ? "opacity-15 pointer-events-none" : "opacity-100"
+        }`}
+      >
         <RealityConstellation
           selectedId={selectedRealityId}
           hoveredId={hoveredRealityId}
           onSelect={(id) => handleToggleSelectReality(id)}
           onHover={setHoveredRealityId}
-          isInteractive={isActive}
+          isInteractive={isObservatoryLayerInteractive}
         />
 
         {/* Quiet Guidance Prompt When Exploring Constellation Overview */}
@@ -102,11 +127,16 @@ export default function CosmicObservatory({
         reality={selectedReality}
         onClose={handleClearSelection}
         onSelectReality={handleDirectSelectReality}
-        isObservatoryActive={isActive}
+        onCommune={handleOpenEnigma}
+        isObservatoryActive={isObservatoryLayerInteractive}
       />
 
       {/* Subtle Bottom Cosmic Telemetry Horizon */}
-      <footer className="pointer-events-none w-full flex items-center justify-between px-4 sm:px-8 pb-4 sm:pb-5 font-[family-name:var(--font-jetbrains-mono)] text-[8px] sm:text-[9px] tracking-[0.26em] text-[#9F95B3]/55 uppercase">
+      <footer
+        className={`pointer-events-none w-full flex items-center justify-between px-4 sm:px-8 pb-4 sm:pb-5 font-[family-name:var(--font-jetbrains-mono)] text-[8px] sm:text-[9px] tracking-[0.26em] text-[#9F95B3]/55 uppercase transition-opacity duration-500 ${
+          isEnigmaOpen ? "opacity-0" : "opacity-100"
+        }`}
+      >
         <span>SYNAPTIC MATRIX // 5 REALITIES ONLINE</span>
         <span className="hidden sm:inline">COSMIC OBSERVATORY // NEXUS</span>
         <span>
@@ -115,6 +145,14 @@ export default function CosmicObservatory({
             : "COHERENCE // HARMONIC"}
         </span>
       </footer>
+
+      {/* Dimensional Communion Interface ("The Enigma") */}
+      <EnigmaCommunion
+        key={selectedReality?.id ?? "global"}
+        reality={selectedReality}
+        isOpen={isActive && isEnigmaOpen}
+        onClose={handleCloseEnigma}
+      />
     </section>
   );
 }

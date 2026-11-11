@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { REALITY_NODES, RealityNode, getConnectedNodeIds } from "./realityData";
 
 /**
@@ -20,6 +20,7 @@ interface RealityInspectorProps {
   reality: RealityNode | null;
   onClose: () => void;
   onSelectReality: (realityId: string) => void;
+  onCommune: () => void;
   isObservatoryActive: boolean;
 }
 
@@ -31,12 +32,10 @@ export default function RealityInspector({
   reality,
   onClose,
   onSelectReality,
+  onCommune,
   isObservatoryActive,
 }: RealityInspectorProps) {
-  const [communedId, setCommunedId] = useState<string | null>(null);
-
   const isVisible = Boolean(reality) && isObservatoryActive;
-  const isCommuning = Boolean(reality && communedId === reality.id);
 
   // Close deep-dive inspector cleanly on Escape key while active
   useEffect(() => {
@@ -44,7 +43,6 @@ export default function RealityInspector({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setCommunedId(null);
         onClose();
       }
     };
@@ -96,10 +94,7 @@ export default function RealityInspector({
               <button
                 type="button"
                 tabIndex={tabIndex}
-                onClick={() => {
-                  setCommunedId(null);
-                  onClose();
-                }}
+                onClick={onClose}
                 className="tracking-[0.22em] text-[#C2B0FF]/85 hover:text-[#F6F3FE] uppercase transition-colors cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/60"
               >
                 [ &larr; RETURN TO CONSTELLATION ]
@@ -182,10 +177,7 @@ export default function RealityInspector({
                     key={peer.id}
                     type="button"
                     tabIndex={tabIndex}
-                    onClick={() => {
-                      setCommunedId(null);
-                      onSelectReality(peer.id);
-                    }}
+                    onClick={() => onSelectReality(peer.id)}
                     className="flex items-center gap-1.5 text-[#C2B0FF]/85 hover:text-[#FFFFFF] underline underline-offset-4 decoration-[#C2B0FF]/35 hover:decoration-[#F6F3FE] transition-colors cursor-pointer"
                   >
                     <span
@@ -198,44 +190,16 @@ export default function RealityInspector({
               </div>
             )}
 
-            {/* Active Enigma Communion Telemetry Feed (When Engaged) */}
-            {isCommuning && (
-              <div className="pl-3 border-l border-[#C2B0FF]/60 font-[family-name:var(--font-jetbrains-mono)] text-[10px] tracking-[0.18em] text-[#F6F3FE] uppercase">
-                <div className="flex items-center gap-2 text-glow-celestial">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#F6F3FE] animate-ping" />
-                  <span>{reality.enigmaTransmission}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Primary Enigma Action Trigger */}
+            {/* Primary Enigma Communion Trigger */}
             <div className="pt-1 flex items-center justify-between gap-3">
               <button
                 type="button"
                 tabIndex={tabIndex}
-                onClick={() =>
-                  setCommunedId((prev) =>
-                    prev === reality.id ? null : reality.id
-                  )
-                }
-                className={`group relative flex items-center gap-3 px-5 py-2.5 rounded-full font-[family-name:var(--font-jetbrains-mono)] text-[10px] sm:text-xs tracking-[0.22em] uppercase transition-all duration-400 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70 ${
-                  isCommuning
-                    ? "bg-[#7136D9]/35 border border-[#F6F3FE]/65 text-[#FFFFFF] shadow-[0_0_28px_rgba(194,176,255,0.45)]"
-                    : "bg-[#0A0618]/70 hover:bg-[#160C33]/85 border border-[#C2B0FF]/40 hover:border-[#F6F3FE]/70 text-[#F6F3FE] shadow-[0_0_22px_rgba(113,54,217,0.32)] hover:shadow-[0_0_32px_rgba(194,176,255,0.48)]"
-                }`}
+                onClick={onCommune}
+                className="group relative flex items-center gap-3 px-5 py-2.5 rounded-full bg-[#0A0618]/70 hover:bg-[#160C33]/85 border border-[#C2B0FF]/40 hover:border-[#F6F3FE]/70 font-[family-name:var(--font-jetbrains-mono)] text-[10px] sm:text-xs tracking-[0.22em] text-[#F6F3FE] uppercase shadow-[0_0_22px_rgba(113,54,217,0.32)] hover:shadow-[0_0_32px_rgba(194,176,255,0.48)] transition-all duration-400 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70"
               >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    isCommuning
-                      ? "bg-[#F6F3FE] animate-pulse"
-                      : "bg-[#C2B0FF] group-hover:bg-[#F6F3FE]"
-                  }`}
-                />
-                <span>
-                  {isCommuning
-                    ? "[ HARMONIC LINK ACTIVE ]"
-                    : "[ COMMUNE WITH THE ENIGMA -> ]"}
-                </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C2B0FF] group-hover:bg-[#F6F3FE] group-hover:shadow-[0_0_10px_#F6F3FE] transition-all" />
+                <span>[ COMMUNE WITH THE ENIGMA -&gt; ]</span>
               </button>
             </div>
           </div>

@@ -24,6 +24,10 @@ interface ObservatoryNavbarProps {
   onSelectReality: (realityId: string | null) => void;
   /** Optional hover highlight sync with Constellation SVG threads */
   onHoverReality?: (realityId: string | null) => void;
+  /** Opens Dimensional Communion with The Enigma (scoped to active reality or multiverse) */
+  onOpenEnigma?: () => void;
+  /** Whether Enigma Communion overlay is currently engaged */
+  isEnigmaOpen?: boolean;
   /** Callback to smoothly collapse back into the Cosmic Gateway */
   onExitGateway: () => void;
   /** Controls keyboard focusability while Observatory is hidden */
@@ -34,6 +38,8 @@ export default function ObservatoryNavbar({
   selectedRealityId,
   onSelectReality,
   onHoverReality,
+  onOpenEnigma,
+  isEnigmaOpen = false,
   onExitGateway,
   isInteractive = true,
 }: ObservatoryNavbarProps) {
@@ -131,12 +137,29 @@ export default function ObservatoryNavbar({
           })}
         </div>
 
-        {/* Right Telemetry Indicator & Gateway Exit */}
-        <div className="shrink-0 flex items-center gap-2 sm:gap-3">
-          <div className="hidden lg:flex items-center gap-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.22em] text-[#C2B0FF]/80 uppercase">
+        {/* Right Telemetry Indicator, Enigma Communion & Gateway Exit */}
+        <div className="shrink-0 flex items-center gap-2 sm:gap-2.5">
+          <div className="hidden xl:flex items-center gap-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.22em] text-[#C2B0FF]/80 uppercase">
             <span className="w-1.5 h-1.5 rounded-full bg-[#C2B0FF] animate-pulse shadow-[0_0_8px_#C2B0FF]" />
             <span>5 REALITIES</span>
           </div>
+
+          {onOpenEnigma && (
+            <button
+              type="button"
+              onClick={onOpenEnigma}
+              tabIndex={tabIndex}
+              aria-pressed={isEnigmaOpen}
+              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.20em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70 ${
+                isEnigmaOpen
+                  ? "bg-[#7136D9]/35 border border-[#F6F3FE]/65 text-[#FFFFFF] shadow-[0_0_20px_rgba(194,176,255,0.45)]"
+                  : "bg-[#7136D9]/18 hover:bg-[#7136D9]/35 border border-[#C2B0FF]/35 hover:border-[#F6F3FE]/65 text-[#F6F3FE] shadow-[0_0_16px_rgba(113,54,217,0.22)]"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#C2B0FF] animate-pulse shadow-[0_0_8px_#C2B0FF]" />
+              <span>ENIGMA</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -185,6 +208,22 @@ export default function ObservatoryNavbar({
             </button>
           );
         })}
+        {onOpenEnigma && (
+          <button
+            type="button"
+            tabIndex={tabIndex}
+            onClick={onOpenEnigma}
+            aria-pressed={isEnigmaOpen}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.16em] uppercase transition-colors cursor-pointer ${
+              isEnigmaOpen
+                ? "bg-[#7136D9]/40 text-[#FFFFFF] border border-[#F6F3FE]/60"
+                : "bg-[#7136D9]/20 text-[#F6F3FE] hover:text-[#FFFFFF] border border-[#C2B0FF]/35"
+            }`}
+          >
+            <span className="w-1 h-1 rounded-full bg-[#C2B0FF] animate-pulse" />
+            <span>ENIGMA</span>
+          </button>
+        )}
       </div>
     </nav>
   );
