@@ -18,6 +18,7 @@ import {
   ResonanceProbe,
   getDimensionProfile,
 } from "./enigmaEngine";
+import { cosmicAudio } from "@/lib/cosmicAudio";
 import type { EnigmaActivityState } from "../gateway/AtmosphericCanvas";
 
 /**
@@ -167,6 +168,7 @@ export default function EnigmaCommunion({
 
     let lastTime = performance.now();
     let count = 0;
+    let lastAudioTickChar = 0;
 
     const stepStream = (now: number) => {
       const dt = Math.min((now - lastTime) / 1000, 0.08);
@@ -175,6 +177,11 @@ export default function EnigmaCommunion({
       count = Math.min(fullText.length, count + Math.max(1, dt * 105));
       const intCount = Math.floor(count);
       setRevealedChars(intCount);
+
+      if (intCount - lastAudioTickChar >= 6) {
+        lastAudioTickChar = intCount;
+        cosmicAudio.playTransmissionTick();
+      }
 
       if (intCount < fullText.length) {
         streamRafRef.current = requestAnimationFrame(stepStream);

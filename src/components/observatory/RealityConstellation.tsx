@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef } from "react";
+import { cosmicAudio } from "@/lib/cosmicAudio";
 import {
   REALITY_NODES,
   SYNAPTIC_LINKS,
@@ -285,9 +286,19 @@ export default function RealityConstellation({
               type="button"
               tabIndex={tabIndex}
               onClick={() => onSelect(node.id)}
-              onMouseEnter={() => onHover(node.id)}
+              onMouseEnter={() => {
+                if (isInteractive && hoveredId !== node.id) {
+                  cosmicAudio.playOrbHover();
+                }
+                onHover(node.id);
+              }}
               onMouseLeave={() => onHover(null)}
-              onFocus={() => onHover(node.id)}
+              onFocus={() => {
+                if (isInteractive && hoveredId !== node.id) {
+                  cosmicAudio.playOrbHover();
+                }
+                onHover(node.id);
+              }}
               onBlur={() => onHover(null)}
               aria-pressed={isSelected}
               aria-label={`${node.classification}: ${node.title}`}

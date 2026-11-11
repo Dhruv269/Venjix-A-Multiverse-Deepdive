@@ -7,9 +7,11 @@ import RealityInspector from "./RealityInspector";
 import RealityBreachView from "./RealityBreachView";
 import ForgeTimelineModal from "./ForgeTimelineModal";
 import ObserverIdentityModal from "./ObserverIdentityModal";
+import TimelineComparisonModal from "./TimelineComparisonModal";
 import EnigmaCommunion, {
   CrystallizeDivergencePayload,
 } from "./EnigmaCommunion";
+import { cosmicAudio } from "@/lib/cosmicAudio";
 import type { EnigmaEcho } from "./enigmaEngine";
 import {
   DEFAULT_OBSERVATORY_SPECTRUM,
@@ -82,8 +84,10 @@ export default function CosmicObservatory({
   const [enigmaSession, setEnigmaSession] = useState<number>(0);
   const [isBreachOpen, setIsBreachOpen] = useState<boolean>(false);
   const [isForgeOpen, setIsForgeOpen] = useState<boolean>(false);
+  const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
   const [isObserverOpen, setIsObserverOpen] = useState<boolean>(false);
   const [forgeSession, setForgeSession] = useState<number>(0);
+  const [compareSession, setCompareSession] = useState<number>(0);
   const [observerSession, setObserverSession] = useState<number>(0);
   const [breachSession, setBreachSession] = useState<number>(0);
   const [newlyBornId, setNewlyBornId] = useState<string | null>(null);
@@ -134,6 +138,7 @@ export default function CosmicObservatory({
   useEffect(() => {
     if (!isActive) return;
     onSpectrumChange?.(targetSpectrum);
+    cosmicAudio.updateDroneSpectrum(targetSpectrum);
   }, [isActive, targetSpectrum, onSpectrumChange]);
 
   const handleToggleSelectReality = useCallback((realityId: string | null) => {
@@ -154,6 +159,7 @@ export default function CosmicObservatory({
     setEnigmaSession((s) => s + 1);
     setIsObserverOpen(false);
     setIsForgeOpen(false);
+    setIsCompareOpen(false);
     setIsEnigmaOpen(true);
   }, []);
 
@@ -163,6 +169,7 @@ export default function CosmicObservatory({
         setEnigmaSession((s) => s + 1);
         setIsObserverOpen(false);
         setIsForgeOpen(false);
+        setIsCompareOpen(false);
       }
       return !prev;
     });
@@ -176,6 +183,8 @@ export default function CosmicObservatory({
     if (!selectedRealityId) return;
     setHoveredRealityId(null);
     setIsObserverOpen(false);
+    setIsCompareOpen(false);
+    cosmicAudio.playBreachTransition();
     setBreachSession((session) => session + 1);
     setIsBreachOpen(true);
   }, [selectedRealityId]);
@@ -207,6 +216,7 @@ export default function CosmicObservatory({
     setIsEnigmaOpen(false);
     setIsBreachOpen(false);
     setIsObserverOpen(false);
+    setIsCompareOpen(false);
     setForgeSession((s) => s + 1);
     setIsForgeOpen(true);
   }, []);
@@ -215,11 +225,36 @@ export default function CosmicObservatory({
     setIsForgeOpen(false);
   }, []);
 
+  const handleOpenCompare = useCallback(() => {
+    setHoveredRealityId(null);
+    setIsEnigmaOpen(false);
+    setIsBreachOpen(false);
+    setIsForgeOpen(false);
+    setIsObserverOpen(false);
+    cosmicAudio.playOrbHover();
+    setCompareSession((s) => s + 1);
+    setIsCompareOpen(true);
+  }, []);
+
+  const handleCloseCompare = useCallback(() => {
+    setIsCompareOpen(false);
+  }, []);
+
+  const handleEnterBreachFromCompare = useCallback((realityId: string) => {
+    setIsCompareOpen(false);
+    setHoveredRealityId(null);
+    setSelectedRealityId(realityId);
+    cosmicAudio.playBreachTransition();
+    setBreachSession((session) => session + 1);
+    setIsBreachOpen(true);
+  }, []);
+
   const handleOpenObserver = useCallback(() => {
     setHoveredRealityId(null);
     setIsEnigmaOpen(false);
     setIsBreachOpen(false);
     setIsForgeOpen(false);
+    setIsCompareOpen(false);
     setObserverSession((s) => s + 1);
     setIsObserverOpen(true);
   }, []);
@@ -336,6 +371,7 @@ export default function CosmicObservatory({
       setHoveredRealityId(null);
       setSelectedRealityId(savedNode.id);
       scheduleNewlyBornHighlight(savedNode.id);
+      cosmicAudio.playBreachTransition();
 
       if (enterBreachImmediately) {
         setBreachSession((session) => session + 1);
@@ -366,6 +402,7 @@ export default function CosmicObservatory({
       const savedNode = appendOrRotateCustomNode(node, link);
       setSelectedRealityId(savedNode.id);
       scheduleNewlyBornHighlight(savedNode.id);
+      cosmicAudio.playBreachTransition();
     },
     [
       allNodes,
@@ -410,6 +447,7 @@ export default function CosmicObservatory({
     setIsEnigmaOpen(false);
     setIsBreachOpen(false);
     setIsForgeOpen(false);
+    setIsCompareOpen(false);
     setIsObserverOpen(false);
     setSelectedRealityId(null);
     setHoveredRealityId(null);
@@ -420,7 +458,12 @@ export default function CosmicObservatory({
   }, [onExitGateway, onSpectrumChange, onEnigmaStateChange]);
 
   const isObservatoryLayerInteractive =
-    isActive && !isEnigmaOpen && !isBreachOpen && !isForgeOpen && !isObserverOpen;
+    isActive &&
+    !isEnigmaOpen &&
+    !isBreachOpen &&
+    !isForgeOpen &&
+    !isCompareOpen &&
+    !isObserverOpen;
 
   return (
     <section
@@ -435,9 +478,9 @@ export default function CosmicObservatory({
     >
       {/* Floating Translucent Navigation Capsule */}
       <div
-        inert={isBreachOpen || isForgeOpen || isObserverOpen || undefined}
+        inert={isBreachOpen || isForgeOpen || isCompareOpen || isObserverOpen || undefined}
         className={`w-full transition-opacity duration-500 ${
-          isBreachOpen || isForgeOpen || isObserverOpen
+          isBreachOpen || isForgeOpen || isCompareOpen || isObserverOpen
             ? "opacity-0 pointer-events-none"
             : "opacity-100"
         }`}
@@ -449,9 +492,11 @@ export default function CosmicObservatory({
           onHoverReality={setHoveredRealityId}
           onOpenEnigma={handleToggleEnigma}
           onOpenForge={handleOpenForge}
+          onOpenCompare={handleOpenCompare}
           onOpenObserver={handleOpenObserver}
           observerHandle={observerProfile.observerHandle}
           isEnigmaOpen={isEnigmaOpen}
+          isCompareOpen={isCompareOpen}
           isObserverOpen={isObserverOpen}
           onExitGateway={handleExit}
           isInteractive={isObservatoryLayerInteractive}
@@ -463,7 +508,7 @@ export default function CosmicObservatory({
         className={`relative flex-1 w-full flex flex-col items-center justify-center px-4 sm:px-8 overflow-visible transition-opacity duration-700 ${
           isBreachOpen
             ? "opacity-0 pointer-events-none"
-            : isEnigmaOpen || isForgeOpen || isObserverOpen
+            : isEnigmaOpen || isForgeOpen || isCompareOpen || isObserverOpen
               ? "opacity-15 pointer-events-none"
               : "opacity-100"
         }`}
@@ -516,7 +561,7 @@ export default function CosmicObservatory({
       {/* Subtle Bottom Cosmic Telemetry Horizon */}
       <footer
         className={`pointer-events-none w-full flex items-center justify-between px-4 sm:px-8 pb-4 sm:pb-5 font-[family-name:var(--font-jetbrains-mono)] text-[8px] sm:text-[9px] tracking-[0.26em] text-[#9F95B3]/55 uppercase transition-opacity duration-500 ${
-          isEnigmaOpen || isBreachOpen || isForgeOpen || isObserverOpen
+          isEnigmaOpen || isBreachOpen || isForgeOpen || isCompareOpen || isObserverOpen
             ? "opacity-0"
             : "opacity-100"
         }`}
@@ -555,6 +600,16 @@ export default function CosmicObservatory({
         onClose={handleCloseForge}
         onBaselineChange={handleBaselineChange}
         onTimelineForged={handleTimelineForged}
+      />
+
+      {/* Quantum Superposition Parallel Life Comparison Matrix */}
+      <TimelineComparisonModal
+        key={`compare-${compareSession}`}
+        isOpen={isActive && isCompareOpen}
+        nodes={allNodes}
+        selectedRealityId={selectedRealityId}
+        onClose={handleCloseCompare}
+        onEnterBreachForReality={handleEnterBreachFromCompare}
       />
 
       {/* Observer Identity Synchronization & Vault Console */}

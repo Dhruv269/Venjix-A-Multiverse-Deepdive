@@ -9,6 +9,7 @@ import { CosmicSequenceState } from "@/components/gateway/CosmicPhenomenon";
 import TelemetryHUD from "@/components/gateway/TelemetryHUD";
 import InitiateContactButton from "@/components/gateway/InitiateContactButton";
 import CosmicObservatory from "@/components/observatory/CosmicObservatory";
+import { cosmicAudio } from "@/lib/cosmicAudio";
 
 /**
  * ============================================================================
@@ -119,6 +120,7 @@ export default function VenjixCosmicGatewayPage() {
     setWarpProgress(0);
     setActiveSpectrum(DEFAULT_NEBULA_SPECTRUM);
     setEnigmaState("idle");
+    cosmicAudio.updateDroneSpectrum(DEFAULT_NEBULA_SPECTRUM);
     setBypassOpening(true);
     setOpeningStage(4);
     setGatewayResetKey((prev) => prev + 1);
@@ -179,7 +181,7 @@ export default function VenjixCosmicGatewayPage() {
             openingStage >= 4 ? "opacity-100" : "opacity-0 pointer-events-none"
           }`}
         >
-          <TelemetryHUD />
+          <TelemetryHUD isInteractive={!isObservatoryActive && openingStage >= 4} />
         </div>
 
         {/* LAYER 2: CINEMATIC REFINED BRAND HEADER (Stage 2: 2.2s – 4.5s) */}

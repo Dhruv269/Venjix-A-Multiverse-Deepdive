@@ -2,6 +2,7 @@
 
 import React from "react";
 import ArtifactSymbol from "@/components/gateway/ArtifactSymbol";
+import { cosmicAudio, useCosmicAudioState } from "@/lib/cosmicAudio";
 import { REALITY_NODES, RealityNode } from "./realityData";
 
 /**
@@ -10,11 +11,6 @@ import { REALITY_NODES, RealityNode } from "./realityData";
  * ============================================================================
  * Floating, translucent orbital navigation capsule suspended directly inside
  * the Cosmic Observatory deep-space vista.
- *
- * Capabilities:
- * - Quick-switching across all 5 Alternate Reality Nodes (`OMEGA-01` .. `MYTHOS-07`).
- * - `NETWORK` reset to view the full interconnected Multiverse Constellation.
- * - `GATEWAY` collapse return path cleanly preserving session state.
  */
 
 interface ObservatoryNavbarProps {
@@ -30,12 +26,16 @@ interface ObservatoryNavbarProps {
   onOpenEnigma?: () => void;
   /** Opens the Forge Personal Divergence modal to simulate a life-choice timeline */
   onOpenForge?: () => void;
+  /** Opens the Quantum Superposition Timeline Comparison Matrix */
+  onOpenCompare?: () => void;
   /** Opens the Observer Identity Synchronization modal */
   onOpenObserver?: () => void;
   /** Active Observer handle shown in the navbar status pill */
   observerHandle?: string;
   /** Whether Enigma Communion overlay is currently engaged */
   isEnigmaOpen?: boolean;
+  /** Whether Timeline Comparison modal is currently engaged */
+  isCompareOpen?: boolean;
   /** Whether Observer Identity modal is currently engaged */
   isObserverOpen?: boolean;
   /** Callback to smoothly collapse back into the Cosmic Gateway */
@@ -51,22 +51,25 @@ export default function ObservatoryNavbar({
   onHoverReality,
   onOpenEnigma,
   onOpenForge,
+  onOpenCompare,
   onOpenObserver,
   observerHandle = "GUEST-01",
   isEnigmaOpen = false,
+  isCompareOpen = false,
   isObserverOpen = false,
   onExitGateway,
   isInteractive = true,
 }: ObservatoryNavbarProps) {
   const tabIndex = isInteractive ? 0 : -1;
+  const audioState = useCosmicAudioState();
 
   return (
     <nav
       aria-label="Cosmic Observatory Navigation"
-      className="relative z-30 w-full max-w-6xl mx-auto pt-4 sm:pt-6 px-3 sm:px-6 flex flex-col items-center gap-2"
+      className="relative z-30 w-full max-w-[92rem] mx-auto pt-4 sm:pt-6 px-3 sm:px-6 flex flex-col items-center gap-2"
     >
       {/* Floating Translucent Orbital Capsule */}
-      <div className="relative w-full flex items-center justify-between gap-2 sm:gap-3 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-full bg-[#0A0618]/45 border border-[#C2B0FF]/18 backdrop-blur-xl shadow-[0_12px_40px_rgba(3,2,6,0.72),0_0_28px_rgba(113,54,217,0.14)]">
+      <div className="relative w-full flex flex-wrap xl:flex-nowrap items-center justify-between gap-2 sm:gap-2.5 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-3xl xl:rounded-full bg-[#0A0618]/45 border border-[#C2B0FF]/18 backdrop-blur-xl shadow-[0_12px_40px_rgba(3,2,6,0.72),0_0_28px_rgba(113,54,217,0.14)]">
         {/* Hairline Top Specular Starlight Rim */}
         <div
           aria-hidden="true"
@@ -152,12 +155,24 @@ export default function ObservatoryNavbar({
           })}
         </div>
 
-        {/* Right Telemetry Indicator, Observer Identity, Forge Choice, Enigma & Gateway Exit */}
-        <div className="shrink-0 flex items-center gap-2">
-          <div className="hidden 2xl:flex items-center gap-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.22em] text-[#C2B0FF]/80 uppercase">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#C2B0FF] animate-pulse shadow-[0_0_8px_#C2B0FF]" />
-            <span>{nodes.length} REALITIES</span>
-          </div>
+        {/* Right Telemetry Indicator, Observer Identity, Compare, Forge, Sound, Enigma & Gateway */}
+        <div className="shrink-0 flex items-center gap-1.5">
+          {onOpenCompare && (
+            <button
+              type="button"
+              tabIndex={tabIndex}
+              onClick={onOpenCompare}
+              aria-pressed={isCompareOpen}
+              title="Compare any two parallel timelines side-by-side"
+              className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.14em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70 ${
+                isCompareOpen
+                  ? "bg-[#7136D9]/40 border-[#F6F3FE]/70 text-[#FFFFFF] shadow-[0_0_16px_rgba(194,176,255,0.4)]"
+                  : "bg-[#0D0720]/70 hover:bg-[#190F3C]/85 border-[#C2B0FF]/35 hover:border-[#F6F3FE]/70 text-[#E9E2F5] hover:text-[#FFFFFF]"
+              }`}
+            >
+              <span>[ COMPARE TIMELINES ]</span>
+            </button>
+          )}
 
           {onOpenObserver && (
             <button
@@ -166,7 +181,7 @@ export default function ObservatoryNavbar({
               onClick={onOpenObserver}
               aria-pressed={isObserverOpen}
               title="Synchronize Observer Identity, Life Baseline & Cloud/Local Vault"
-              className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full border font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.16em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70 ${
+              className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.14em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70 ${
                 isObserverOpen
                   ? "bg-[#7136D9]/40 border-[#F6F3FE]/70 text-[#FFFFFF] shadow-[0_0_16px_rgba(194,176,255,0.4)]"
                   : "bg-[#0D0720]/70 hover:bg-[#190F3C]/85 border-[#C2B0FF]/35 hover:border-[#F6F3FE]/70 text-[#E9E2F5] hover:text-[#FFFFFF]"
@@ -185,7 +200,7 @@ export default function ObservatoryNavbar({
               tabIndex={tabIndex}
               onClick={onOpenForge}
               title="Simulate a personal life choice to forge a new timeline"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0284C7]/20 hover:bg-[#0284C7]/35 border border-[#38BDF8]/45 hover:border-[#F6F3FE]/75 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.18em] text-[#F6F3FE] uppercase shadow-[0_0_14px_rgba(56,189,248,0.22)] transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#38BDF8]/70"
+              className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#0284C7]/20 hover:bg-[#0284C7]/35 border border-[#38BDF8]/45 hover:border-[#F6F3FE]/75 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.14em] text-[#F6F3FE] uppercase shadow-[0_0_14px_rgba(56,189,248,0.22)] transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#38BDF8]/70"
             >
               <span className="text-[#38BDF8] font-bold">+</span>
               <span>FORGE CHOICE</span>
@@ -198,7 +213,7 @@ export default function ObservatoryNavbar({
               onClick={onOpenEnigma}
               tabIndex={tabIndex}
               aria-pressed={isEnigmaOpen}
-              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.20em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70 ${
+              className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.16em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70 ${
                 isEnigmaOpen
                   ? "bg-[#7136D9]/35 border border-[#F6F3FE]/65 text-[#FFFFFF] shadow-[0_0_20px_rgba(194,176,255,0.45)]"
                   : "bg-[#7136D9]/18 hover:bg-[#7136D9]/35 border border-[#C2B0FF]/35 hover:border-[#F6F3FE]/65 text-[#F6F3FE] shadow-[0_0_16px_rgba(113,54,217,0.22)]"
@@ -211,9 +226,37 @@ export default function ObservatoryNavbar({
 
           <button
             type="button"
+            tabIndex={tabIndex}
+            onClick={() => cosmicAudio.toggleMute()}
+            aria-pressed={audioState.isActive}
+            aria-label={
+              audioState.isActive
+                ? "Mute procedural cosmic audio"
+                : "Activate procedural cosmic audio"
+            }
+            className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.14em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70 ${
+              audioState.isActive
+                ? "bg-[#7136D9]/25 border-[#C2B0FF]/50 text-[#F6F3FE] shadow-[0_0_16px_rgba(194,176,255,0.28)]"
+                : "bg-[#0D0720]/70 hover:bg-[#190F3C]/85 border-[#C2B0FF]/25 hover:border-[#C2B0FF]/55 text-[#9F95B3] hover:text-[#F6F3FE]"
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                audioState.isActive
+                  ? "bg-[#38BDF8] animate-pulse shadow-[0_0_8px_#38BDF8]"
+                  : "bg-[#9F95B3]/45"
+              }`}
+            />
+            <span>
+              {audioState.isActive ? "[ SOUND // ACTIVE ]" : "[ SOUND // MUTED ]"}
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={onExitGateway}
             tabIndex={tabIndex}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#160C33]/55 hover:bg-[#2A1F45]/75 border border-[#C2B0FF]/25 hover:border-[#C2B0FF]/55 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.20em] text-[#E9E2F5]/90 hover:text-[#FFFFFF] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/60"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-[#160C33]/55 hover:bg-[#2A1F45]/75 border border-[#C2B0FF]/25 hover:border-[#C2B0FF]/55 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.16em] text-[#E9E2F5]/90 hover:text-[#FFFFFF] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/60"
           >
             <span>GATEWAY</span>
           </button>
@@ -256,6 +299,17 @@ export default function ObservatoryNavbar({
             </button>
           );
         })}
+        {onOpenCompare && (
+          <button
+            type="button"
+            tabIndex={tabIndex}
+            onClick={onOpenCompare}
+            aria-pressed={isCompareOpen}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#0D0720]/75 text-[#E9E2F5] border border-[#C2B0FF]/35 font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.14em] uppercase transition-colors cursor-pointer"
+          >
+            <span>COMPARE TIMELINES</span>
+          </button>
+        )}
         {onOpenObserver && (
           <button
             type="button"
@@ -270,6 +324,26 @@ export default function ObservatoryNavbar({
             </span>
           </button>
         )}
+        <button
+          type="button"
+          tabIndex={tabIndex}
+          onClick={() => cosmicAudio.toggleMute()}
+          aria-pressed={audioState.isActive}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-full border font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.14em] uppercase transition-colors cursor-pointer ${
+            audioState.isActive
+              ? "bg-[#7136D9]/30 text-[#F6F3FE] border-[#C2B0FF]/45"
+              : "bg-[#0D0720]/75 text-[#9F95B3] border-[#C2B0FF]/25"
+          }`}
+        >
+          <span
+            className={`w-1 h-1 rounded-full ${
+              audioState.isActive ? "bg-[#38BDF8] animate-pulse" : "bg-[#9F95B3]/45"
+            }`}
+          />
+          <span>
+            {audioState.isActive ? "[ SOUND // ACTIVE ]" : "[ SOUND // MUTED ]"}
+          </span>
+        </button>
         {onOpenForge && (
           <button
             type="button"

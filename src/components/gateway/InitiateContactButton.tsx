@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { CosmicSequenceState } from "./CosmicPhenomenon";
+import { cosmicAudio } from "@/lib/cosmicAudio";
 
 /**
  * ============================================================================
@@ -112,6 +113,7 @@ export default function InitiateContactButton({
    */
   const handleSkip = useCallback(() => {
     clearScheduledWork();
+    cosmicAudio.unlockFromGesture();
     setIsRunning(false);
     setProgress(100);
     setStage("origin_synchronized");
@@ -138,6 +140,7 @@ export default function InitiateContactButton({
   const handleInitiate = useCallback(() => {
     if (stage !== "idle") return;
     clearScheduledWork();
+    cosmicAudio.unlockFromGesture();
 
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
