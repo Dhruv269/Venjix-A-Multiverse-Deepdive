@@ -37,6 +37,12 @@ interface AtmosphericCanvasProps {
   sequenceStage?: CosmicSequenceState;
   /** Expands and zooms the cosmos smoothly when entering the Observatory */
   isObservatoryActive?: boolean;
+  /** Normalized awakening warp progress (0.0 in idle -> 1.0 during 3-phase communion) */
+  warpProgress?: number;
+  /** Progressive opening stage (1-4); skips Stage 1 ramp immediately when bypassed */
+  openingStage?: 1 | 2 | 3 | 4;
+  /** Skips the initial 0.05 -> 1.0 environment ramp when already revealed */
+  bypassOpening?: boolean;
 }
 
 // ----------------------------------------------------------------------------
@@ -63,9 +69,11 @@ out vec4 fragColor;
 
 uniform vec2 u_resolution;
 uniform float u_time;
+uniform float u_flowTime;
 uniform vec2 u_mouse;
 uniform float u_reveal;
 uniform float u_observatory;
+uniform float u_warp;
 
 // --- High-Precision Smooth Value Noise in [0.0, 1.0] ---
 float hash(vec2 p) {
@@ -178,21 +186,29 @@ void main() {
   vec2 p = uv;
   p.x *= aspect;
 
-  // Smooth cosmic fly-in zoom & dimensional expansion into the Observatory
-  float obsMix = clamp(u_observatory, 0.0, 1.0);
-  vec2 obsZoomCenter = vec2(0.62 * aspect, 0.54);
-  vec2 pNebula = mix(p, obsZoomCenter + (p - obsZoomCenter) * 0.72, obsMix);
-  vec2 pStars = mix(p, vec2(0.50 * aspect, 0.50) + (p - vec2(0.50 * aspect, 0.50)) * 0.84, obsMix);
-
   // Gravitational focal center anchored in upper-right
   vec2 focal = vec2(0.74 * aspect, 0.58) + u_mouse * 0.05;
+
+  // Spatial warp & Observatory camera transition weights
+  float obsMix = clamp(u_observatory, 0.0, 1.0);
+  float warp = clamp(u_warp, 0.0, 1.0);
+
+  // Pull UV zoom focus from upper-right anomaly (during awakening warp) into Observatory horizon
+  vec2 warpOrigin = mix(focal, vec2(0.58 * aspect, 0.52), obsMix * 0.65);
+  float pullAmount = max(warp, obsMix * 0.85);
+  float zoomScale = mix(1.0, 0.68, pullAmount);
+  vec2 pNebula = warpOrigin + (p - warpOrigin) * zoomScale;
+
+  // Multi-plane parallax depth zoom for stars
+  vec2 starOrigin = mix(focal, vec2(0.50 * aspect, 0.50), obsMix * 0.78);
+  vec2 pStars = starOrigin + (p - starOrigin) * mix(1.0, 0.80, max(warp * 0.65, obsMix * 0.72));
 
   // --- CONTINUOUS CARTESIAN GRAVITATIONAL FLOW ---
   vec2 delta = pNebula - focal;
   float dist = length(delta);
 
-  // Smooth bell-shaped swirl rotation
-  float swirlAngle = 1.15 * exp(-dist * 1.35) * smoothstep(0.0, 0.24, dist);
+  // Smooth bell-shaped swirl rotation, intensifying gently during awakening pull
+  float swirlAngle = 1.15 * (1.0 + warp * 0.28) * exp(-dist * 1.35) * smoothstep(0.0, 0.24, dist);
   float s = sin(swirlAngle);
   float c = cos(swirlAngle);
   vec2 warpedP = focal + mat2(c, -s, s, c) * delta;
@@ -203,8 +219,8 @@ void main() {
   flowP.x *= 0.52; // Elongate along cosmic flow axis into sweeping veils
   flowP.y *= 1.35; // Compress perpendicular to flow for layered silky curtains
 
-  // Time advection along the stream flow
-  float t = u_time * 0.030;
+  // Integrated monotonic domain-warp time advection (smooth acceleration without rewind)
+  float t = u_flowTime * 0.030;
 
   // --- MULTI-SCALE DOMAIN ADVECTION ---
   vec2 q = vec2(
@@ -299,15 +315,21 @@ void main() {
   // Lower-left corner falloff for bright plasma veil
   float cornerFade = smoothstep(-0.25, 0.25, uv.x * 0.90 + uv.y * 0.35);
 
-  // Combined main nebula mask: 1.0 across the right half in Gateway mode,
-  // opening gently across deep space during Observatory expansion while keeping a calm center
-  float gatewayVoidMask = leftFade * wordmarkAtten * ctaAtten * cornerFade;
-  float obsCenterDist = length((uv - vec2(0.50, 0.50)) * vec2(1.0, 0.88));
-  float obsOpenPerimeter = smoothstep(0.12, 0.62, obsCenterDist) * 0.62 + 0.18;
-  float voidMask = mix(gatewayVoidMask, max(gatewayVoidMask * 0.85, obsOpenPerimeter), obsMix);
+  // Dissolve wordmark and bottom CTA shadow masks when entering the Cosmic Observatory
+  // so deep-space nebula fills the entire 360-degree viewport while calming the center orb stage
+  float sanctuaryRelease = obsMix;
+  float activeWordmarkAtten = mix(wordmarkAtten, 1.0, sanctuaryRelease);
+  float activeCtaAtten = mix(ctaAtten, 1.0, sanctuaryRelease);
+  float activeLeftFade = mix(leftFade, 1.0, sanctuaryRelease);
+  float activeCornerFade = mix(cornerFade, 1.0, sanctuaryRelease);
 
-  // Release typography shields cleanly once transformed into Observatory mode
-  float shieldStrength = mix(tightWordmarkShield, 0.0, obsMix);
+  float gatewayVoidMask = activeLeftFade * activeWordmarkAtten * activeCtaAtten * activeCornerFade;
+  float obsCenterDist = length((uv - vec2(0.50, 0.50)) * vec2(1.0, 0.88));
+  float obsCenterCalm = mix(1.0, 0.36 + 0.64 * smoothstep(0.10, 0.56, obsCenterDist), obsMix);
+  float voidMask = gatewayVoidMask * obsCenterCalm;
+
+  // Release typography shield cleanly once transformed into Observatory mode
+  float shieldStrength = mix(tightWordmarkShield, 0.0, sanctuaryRelease);
 
   // --- 4. GHOSTLY ATMOSPHERIC INDIGO WHISPER ACROSS THE LEFT VOID (#0A0618) ---
   // Replaces dead pitch-black emptiness across the left void with subtle cosmic depth,
@@ -321,9 +343,10 @@ void main() {
   float leftMist = smoothstep(0.28, 0.78, leftHazeField);
 
   // Map #0A0618 indigo whisper into 0.04–0.07 HDR contribution over the deep void
+  float baseReveal = min(u_reveal, 1.0);
   float indigoWeight = (0.38 + 0.62 * leftMist) * (1.0 - shieldStrength * 0.92);
-  indigoWeight *= mix(1.0, 0.55, ctaShield * (1.0 - obsMix));
-  vec3 leftVoidWhisperHdr = colIndigo * (indigoWeight * 0.95) * (0.85 + 0.15 * u_reveal);
+  indigoWeight *= mix(1.0, 0.55, ctaShield * (1.0 - sanctuaryRelease));
+  vec3 leftVoidWhisperHdr = colIndigo * (indigoWeight * 0.95) * (0.85 + 0.15 * u_reveal) * baseReveal;
 
   // Composite left indigo whisper + main cosmic phenomenon before filmic tonemapping
   vec3 combinedHdr = leftVoidWhisperHdr + hdrCol * voidMask;
@@ -338,13 +361,29 @@ void main() {
   vec2 moteDrift = vec2(u_time * 0.022, u_time * 0.014);
   vec3 microMotes = starLayer(pStars, 18.0, 0.980, 0.052, 1.4, 15.2, moteDrift) * 0.85;
 
+  // Subtle radial starlight stretching during awakening warp pull into the anomaly
+  vec3 warpStreaks = vec3(0.0);
+  float streakWeight = warp * (1.0 - obsMix * 0.65);
+  if (streakWeight > 0.01) {
+    vec2 pDelta = pStars - starOrigin;
+    float radialDist = length(pDelta);
+    float stretchScale = clamp(radialDist * 0.055 * streakWeight, 0.0, 0.05);
+    vec2 trail1 = starOrigin + pDelta * (1.0 - stretchScale);
+    vec2 trail2 = starOrigin + pDelta * (1.0 - stretchScale * 2.0);
+    warpStreaks += (
+      starLayer(trail1, 24.0, 0.986, 0.030, 2.8, 8.9, vec2(0.0)) * 0.55 +
+      starLayer(trail2, 24.0, 0.986, 0.030, 2.8, 8.9, vec2(0.0)) * 0.30
+    ) * streakWeight;
+  }
+
   // Natural cosmic occlusion: extinguish gently through dense right-side dust, keep crystal clear in left void
   float starTransmission = mix(1.0, 0.35 + 0.65 * darkExtinction, voidMask);
   starTransmission *= (1.0 - smoothstep(0.75, 1.0, plasmaVeins) * 0.55 * voidMask);
 
   // Protect VENJIX typography strokes from bright foreground spots without erasing distant depth
   float wordmarkStarMod = mix(1.0, 0.22, shieldStrength);
-  vec3 totalStarlight = (deepStars * 0.72 + midStars * 0.95 + (heroStars + microMotes) * wordmarkStarMod) * starTransmission;
+  float starOpeningFade = mix(0.18, 1.0, smoothstep(0.05, 0.85, baseReveal));
+  vec3 totalStarlight = (deepStars * 0.72 + midStars * 0.95 + (heroStars + microMotes + warpStreaks) * wordmarkStarMod) * starTransmission * starOpeningFade;
 
   combinedHdr += totalStarlight;
 
@@ -367,13 +406,21 @@ void main() {
 export default function AtmosphericCanvas({
   sequenceStage = "idle",
   isObservatoryActive = false,
+  warpProgress = 0,
+  openingStage = 4,
+  bypassOpening = false,
 }: AtmosphericCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Keep sequenceStage and observatory mode accessible inside the RAF loop via refs
+  // Keep sequenceStage, observatory mode, warp, and opening ramp accessible inside RAF loop
   const stageRef = useRef<CosmicSequenceState>(sequenceStage);
   const observatoryRef = useRef<boolean>(isObservatoryActive);
   const observatoryMixRef = useRef<number>(isObservatoryActive ? 1 : 0);
+  const warpTargetRef = useRef<number>(warpProgress);
+  const warpMixRef = useRef<number>(warpProgress);
+  const openingElapsedRef = useRef<number>(
+    bypassOpening || openingStage >= 4 ? 2.2 : 0
+  );
   const drawCurrentStaticRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -385,6 +432,18 @@ export default function AtmosphericCanvas({
     observatoryRef.current = isObservatoryActive;
     drawCurrentStaticRef.current?.();
   }, [isObservatoryActive]);
+
+  useEffect(() => {
+    warpTargetRef.current = Math.min(1, Math.max(0, warpProgress));
+    drawCurrentStaticRef.current?.();
+  }, [warpProgress]);
+
+  useEffect(() => {
+    if (bypassOpening) {
+      openingElapsedRef.current = 2.2;
+      drawCurrentStaticRef.current?.();
+    }
+  }, [bypassOpening]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -436,8 +495,21 @@ export default function AtmosphericCanvas({
       powerPreference: "high-performance",
     });
 
+    // Check same-session reveal guard to skip Stage 1 darkness ramp immediately when already revealed
+    let hasSessionRevealed = false;
+    try {
+      hasSessionRevealed =
+        window.sessionStorage.getItem("venjix_gateway_revealed") === "true";
+    } catch {
+      hasSessionRevealed = false;
+    }
+    if (prefersReducedMotion || hasSessionRevealed) {
+      openingElapsedRef.current = 2.2;
+    }
+
     let lastTimestamp = performance.now();
     let globalTime = 0;
+    let flowTime = 0;
 
     if (!gl) {
       // ----------------------------------------------------------------------
@@ -523,40 +595,51 @@ export default function AtmosphericCanvas({
     // Uniform locations
     const uResolutionLoc = gl.getUniformLocation(program, "u_resolution");
     const uTimeLoc = gl.getUniformLocation(program, "u_time");
+    const uFlowTimeLoc = gl.getUniformLocation(program, "u_flowTime");
     const uMouseLoc = gl.getUniformLocation(program, "u_mouse");
     const uRevealLoc = gl.getUniformLocation(program, "u_reveal");
     const uObservatoryLoc = gl.getUniformLocation(program, "u_observatory");
+    const uWarpLoc = gl.getUniformLocation(program, "u_warp");
 
     // ------------------------------------------------------------------------
     // DRAW FRAME
     // ------------------------------------------------------------------------
-    const drawFrame = (time: number) => {
+    const drawFrame = (time: number, advectTime: number) => {
       const stage = stageRef.current;
-      let reveal = 1.0;
+      let stageReveal = 1.0;
 
       if (stage === "signal_detected") {
-        reveal = 1.25;
+        stageReveal = 1.25;
       } else if (stage === "dimensional_resonance") {
-        reveal = 1.65;
+        stageReveal = 1.65;
       } else if (stage === "origin_synchronized") {
-        reveal = observatoryRef.current ? 1.32 : 1.45;
+        stageReveal = observatoryRef.current ? 1.32 : 1.45;
       }
+
+      // Stage 1 Environment Opening Ramp: u_reveal progresses smoothly 0.05 -> 1.0 over 2.2s
+      const openT = Math.min(1, Math.max(0, openingElapsedRef.current / 2.2));
+      const smoothOpen = openT * openT * (3 - 2 * openT);
+      const reveal = (0.05 + 0.95 * smoothOpen) * stageReveal;
 
       gl.useProgram(program);
       gl.bindVertexArray(vao);
 
       if (uTimeLoc) gl.uniform1f(uTimeLoc, time);
+      if (uFlowTimeLoc) gl.uniform1f(uFlowTimeLoc, advectTime);
       if (uMouseLoc) gl.uniform2f(uMouseLoc, mouse.x, mouse.y);
       if (uRevealLoc) gl.uniform1f(uRevealLoc, reveal);
       if (uObservatoryLoc) gl.uniform1f(uObservatoryLoc, observatoryMixRef.current);
+      if (uWarpLoc) gl.uniform1f(uWarpLoc, warpMixRef.current);
 
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     };
 
     drawCurrentStaticRef.current = () => {
       if (prefersReducedMotion) {
+        openingElapsedRef.current = 2.2;
         observatoryMixRef.current = observatoryRef.current ? 1 : 0;
-        drawFrame(18.0);
+        warpMixRef.current = warpTargetRef.current;
+        drawFrame(18.0, 18.0);
       }
     };
 
@@ -580,8 +663,10 @@ export default function AtmosphericCanvas({
       }
 
       if (prefersReducedMotion) {
+        openingElapsedRef.current = 2.2;
         observatoryMixRef.current = observatoryRef.current ? 1 : 0;
-        drawFrame(18.0);
+        warpMixRef.current = warpTargetRef.current;
+        drawFrame(18.0, 18.0);
       }
     };
 
@@ -600,17 +685,26 @@ export default function AtmosphericCanvas({
       const delta = Math.min((currentTime - lastTimestamp) / 1000, 0.1);
       lastTimestamp = currentTime;
       globalTime += delta;
+      if (openingElapsedRef.current < 2.2) {
+        openingElapsedRef.current = Math.min(2.2, openingElapsedRef.current + delta);
+      }
 
       // Smooth mouse spring inertia
       mouse.x += (mouse.targetX - mouse.x) * 0.04;
       mouse.y += (mouse.targetY - mouse.y) * 0.04;
 
-      // Smooth framerate-independent camera zoom & expansion transition
+      // Smooth framerate-independent spatial warp and Observatory zoom interpolation
+      const warpLerp = 1 - Math.exp(-delta * 5.5);
+      warpMixRef.current += (warpTargetRef.current - warpMixRef.current) * warpLerp;
+
       const targetObs = observatoryRef.current ? 1 : 0;
       observatoryMixRef.current +=
-        (targetObs - observatoryMixRef.current) * (1 - Math.exp(-delta * 2.2));
+        (targetObs - observatoryMixRef.current) * (1 - Math.exp(-delta * 2.4));
 
-      drawFrame(globalTime);
+      // Monotonically integrate domain-warp flow velocity so fluid accelerates seamlessly
+      flowTime += delta * (1.0 + warpMixRef.current * 1.45);
+
+      drawFrame(globalTime, flowTime);
 
       animId = requestAnimationFrame(loop);
     };

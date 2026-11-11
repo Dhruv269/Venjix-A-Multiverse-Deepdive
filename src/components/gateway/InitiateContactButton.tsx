@@ -23,6 +23,8 @@ import { CosmicSequenceState } from "./CosmicPhenomenon";
 interface InitiateContactButtonProps {
   /** Notifies parent when the cosmic sequence phase transitions */
   onSequenceChange?: (stage: CosmicSequenceState) => void;
+  /** Emits normalized warp/progression values (0.0 -> 1.0) during sequence */
+  onProgressChange?: (progress01: number) => void;
   /** Invoked at 100% completion (after a brief hold) or immediately on Skip */
   onComplete?: () => void;
 }
@@ -70,6 +72,7 @@ const STEPPER_NODES: Array<{
 
 export default function InitiateContactButton({
   onSequenceChange,
+  onProgressChange,
   onComplete,
 }: InitiateContactButtonProps) {
   const [stage, setStage] = useState<CosmicSequenceState>("idle");
@@ -78,10 +81,14 @@ export default function InitiateContactButton({
 
   // Isolate parent callbacks in refs so parent re-renders never cancel active progression
   const onSequenceChangeRef = useRef(onSequenceChange);
+  const onProgressChangeRef = useRef(onProgressChange);
   const onCompleteRef = useRef(onComplete);
   useEffect(() => {
     onSequenceChangeRef.current = onSequenceChange;
   }, [onSequenceChange]);
+  useEffect(() => {
+    onProgressChangeRef.current = onProgressChange;
+  }, [onProgressChange]);
   useEffect(() => {
     onCompleteRef.current = onComplete;
   }, [onComplete]);
@@ -108,6 +115,7 @@ export default function InitiateContactButton({
     setIsRunning(false);
     setProgress(100);
     setStage("origin_synchronized");
+    onProgressChangeRef.current?.(1);
     onSequenceChangeRef.current?.("origin_synchronized");
     onCompleteRef.current?.();
   }, [clearScheduledWork]);
@@ -120,6 +128,7 @@ export default function InitiateContactButton({
     setIsRunning(false);
     setProgress(0);
     setStage("idle");
+    onProgressChangeRef.current?.(0);
     onSequenceChangeRef.current?.("idle");
   }, [clearScheduledWork]);
 
@@ -138,6 +147,7 @@ export default function InitiateContactButton({
       // Advance directly to 100% synchronized state for motion-sensitive users
       setProgress(100);
       setStage("origin_synchronized");
+      onProgressChangeRef.current?.(1);
       onSequenceChangeRef.current?.("origin_synchronized");
       holdTimerRef.current = setTimeout(() => {
         onCompleteRef.current?.();
@@ -147,6 +157,7 @@ export default function InitiateContactButton({
 
     setProgress(0);
     setStage("signal_detected");
+    onProgressChangeRef.current?.(0);
     onSequenceChangeRef.current?.("signal_detected");
     setIsRunning(true);
   }, [stage, clearScheduledWork]);
@@ -161,11 +172,18 @@ export default function InitiateContactButton({
 
     const startTime = performance.now();
     let currentNotifiedStage: CosmicSequenceState = "signal_detected";
+    let lastEmittedPctStep = 0;
 
     const tick = (now: number) => {
       const elapsed = now - startTime;
       const pct = Math.min(100, (elapsed / TOTAL_SEQUENCE_MS) * 100);
       setProgress(pct);
+
+      const pctStep = Math.round(pct);
+      if (pctStep !== lastEmittedPctStep) {
+        lastEmittedPctStep = pctStep;
+        onProgressChangeRef.current?.(pctStep / 100);
+      }
 
       const nextStage: CosmicSequenceState =
         pct < 33.333
@@ -185,6 +203,9 @@ export default function InitiateContactButton({
       } else {
         rafIdRef.current = null;
         setProgress(100);
+        if (lastEmittedPctStep !== 100) {
+          onProgressChangeRef.current?.(1);
+        }
 
         holdTimerRef.current = setTimeout(() => {
           holdTimerRef.current = null;
