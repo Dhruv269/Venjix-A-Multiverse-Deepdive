@@ -35,6 +35,8 @@ import { CosmicSequenceState } from "./CosmicPhenomenon";
 interface AtmosphericCanvasProps {
   /** Interaction sequence stage to modulate celestial radiance */
   sequenceStage?: CosmicSequenceState;
+  /** Expands and zooms the cosmos smoothly when entering the Observatory */
+  isObservatoryActive?: boolean;
 }
 
 // ----------------------------------------------------------------------------
@@ -63,6 +65,7 @@ uniform vec2 u_resolution;
 uniform float u_time;
 uniform vec2 u_mouse;
 uniform float u_reveal;
+uniform float u_observatory;
 
 // --- High-Precision Smooth Value Noise in [0.0, 1.0] ---
 float hash(vec2 p) {
@@ -175,11 +178,17 @@ void main() {
   vec2 p = uv;
   p.x *= aspect;
 
+  // Smooth cosmic fly-in zoom & dimensional expansion into the Observatory
+  float obsMix = clamp(u_observatory, 0.0, 1.0);
+  vec2 obsZoomCenter = vec2(0.62 * aspect, 0.54);
+  vec2 pNebula = mix(p, obsZoomCenter + (p - obsZoomCenter) * 0.72, obsMix);
+  vec2 pStars = mix(p, vec2(0.50 * aspect, 0.50) + (p - vec2(0.50 * aspect, 0.50)) * 0.84, obsMix);
+
   // Gravitational focal center anchored in upper-right
   vec2 focal = vec2(0.74 * aspect, 0.58) + u_mouse * 0.05;
 
   // --- CONTINUOUS CARTESIAN GRAVITATIONAL FLOW ---
-  vec2 delta = p - focal;
+  vec2 delta = pNebula - focal;
   float dist = length(delta);
 
   // Smooth bell-shaped swirl rotation
@@ -256,7 +265,7 @@ void main() {
   hdrCol += colViolet * coreGlow;
 
   // --- 2. PROCEDURAL MICRO-STAR CLUSTERS ALONG DUST EDGES (Nebular Nurseries) ---
-  float starHash = fract(sin(dot(gl_FragCoord.xy + p * 12.34, vec2(12.9898, 78.233))) * 43758.5453);
+  float starHash = fract(sin(dot(gl_FragCoord.xy + pNebula * 12.34, vec2(12.9898, 78.233))) * 43758.5453);
   float dustEdge1 = smoothstep(0.45, 0.65, abs(darkLane1 - 0.50));
   float dustEdge2 = smoothstep(0.45, 0.65, abs(darkLane2 - 0.50));
   float dustEdge = max(dustEdge1, dustEdge2);
@@ -290,13 +299,20 @@ void main() {
   // Lower-left corner falloff for bright plasma veil
   float cornerFade = smoothstep(-0.25, 0.25, uv.x * 0.90 + uv.y * 0.35);
 
-  // Combined main nebula mask: 1.0 across the entire right half of the screen
-  float voidMask = leftFade * wordmarkAtten * ctaAtten * cornerFade;
+  // Combined main nebula mask: 1.0 across the right half in Gateway mode,
+  // opening gently across deep space during Observatory expansion while keeping a calm center
+  float gatewayVoidMask = leftFade * wordmarkAtten * ctaAtten * cornerFade;
+  float obsCenterDist = length((uv - vec2(0.50, 0.50)) * vec2(1.0, 0.88));
+  float obsOpenPerimeter = smoothstep(0.12, 0.62, obsCenterDist) * 0.62 + 0.18;
+  float voidMask = mix(gatewayVoidMask, max(gatewayVoidMask * 0.85, obsOpenPerimeter), obsMix);
+
+  // Release typography shields cleanly once transformed into Observatory mode
+  float shieldStrength = mix(tightWordmarkShield, 0.0, obsMix);
 
   // --- 4. GHOSTLY ATMOSPHERIC INDIGO WHISPER ACROSS THE LEFT VOID (#0A0618) ---
   // Replaces dead pitch-black emptiness across the left void with subtle cosmic depth,
   // while keeping a tight black contrast pocket directly behind the VENJIX wordmark.
-  vec2 leftHazeCoord = vec2(p.x * 0.58 - t * 0.16, p.y * 0.68 + t * 0.10) + u_mouse * 0.03;
+  vec2 leftHazeCoord = vec2(pNebula.x * 0.58 - t * 0.16, pNebula.y * 0.68 + t * 0.10) + u_mouse * 0.03;
   vec2 hazeWarp = vec2(
     fbm(leftHazeCoord + vec2(1.4, 2.8)),
     fbm(leftHazeCoord + vec2(6.2, 4.1) - t * 0.08)
@@ -305,8 +321,8 @@ void main() {
   float leftMist = smoothstep(0.28, 0.78, leftHazeField);
 
   // Map #0A0618 indigo whisper into 0.04–0.07 HDR contribution over the deep void
-  float indigoWeight = (0.38 + 0.62 * leftMist) * (1.0 - tightWordmarkShield * 0.92);
-  indigoWeight *= mix(1.0, 0.55, ctaShield);
+  float indigoWeight = (0.38 + 0.62 * leftMist) * (1.0 - shieldStrength * 0.92);
+  indigoWeight *= mix(1.0, 0.55, ctaShield * (1.0 - obsMix));
   vec3 leftVoidWhisperHdr = colIndigo * (indigoWeight * 0.95) * (0.85 + 0.15 * u_reveal);
 
   // Composite left indigo whisper + main cosmic phenomenon before filmic tonemapping
@@ -314,20 +330,20 @@ void main() {
 
   // --- 5. EXPANDED FULL-VIEWPORT DEEP-SPACE STARFIELD & DRIFTING MICRO-MOTES ---
   // Scatters across 100% of the viewport (left void, bottom center, and right expanse)
-  vec3 deepStars = starLayer(p, 92.0, 0.952, 0.008, 1.8, 1.3, vec2(0.0));
-  vec3 midStars  = starLayer(p, 46.0, 0.974, 0.018, 2.3, 4.7, vec2(0.0));
-  vec3 heroStars = starLayer(p, 24.0, 0.986, 0.030, 2.8, 8.9, vec2(0.0));
+  vec3 deepStars = starLayer(pStars, 92.0, 0.952, 0.008, 1.8, 1.3, vec2(0.0));
+  vec3 midStars  = starLayer(pStars, 46.0, 0.974, 0.018, 2.3, 4.7, vec2(0.0));
+  vec3 heroStars = starLayer(pStars, 24.0, 0.986, 0.030, 2.8, 8.9, vec2(0.0));
 
   // Slowly drifting near-field micro-motes catching celestial starlight across space
   vec2 moteDrift = vec2(u_time * 0.022, u_time * 0.014);
-  vec3 microMotes = starLayer(p, 18.0, 0.980, 0.052, 1.4, 15.2, moteDrift) * 0.85;
+  vec3 microMotes = starLayer(pStars, 18.0, 0.980, 0.052, 1.4, 15.2, moteDrift) * 0.85;
 
   // Natural cosmic occlusion: extinguish gently through dense right-side dust, keep crystal clear in left void
   float starTransmission = mix(1.0, 0.35 + 0.65 * darkExtinction, voidMask);
   starTransmission *= (1.0 - smoothstep(0.75, 1.0, plasmaVeins) * 0.55 * voidMask);
 
   // Protect VENJIX typography strokes from bright foreground spots without erasing distant depth
-  float wordmarkStarMod = mix(1.0, 0.22, tightWordmarkShield);
+  float wordmarkStarMod = mix(1.0, 0.22, shieldStrength);
   vec3 totalStarlight = (deepStars * 0.72 + midStars * 0.95 + (heroStars + microMotes) * wordmarkStarMod) * starTransmission;
 
   combinedHdr += totalStarlight;
@@ -350,14 +366,25 @@ void main() {
 
 export default function AtmosphericCanvas({
   sequenceStage = "idle",
+  isObservatoryActive = false,
 }: AtmosphericCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Keep sequenceStage accessible inside the RAF loop via ref
+  // Keep sequenceStage and observatory mode accessible inside the RAF loop via refs
   const stageRef = useRef<CosmicSequenceState>(sequenceStage);
+  const observatoryRef = useRef<boolean>(isObservatoryActive);
+  const observatoryMixRef = useRef<number>(isObservatoryActive ? 1 : 0);
+  const drawCurrentStaticRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     stageRef.current = sequenceStage;
+    drawCurrentStaticRef.current?.();
   }, [sequenceStage]);
+
+  useEffect(() => {
+    observatoryRef.current = isObservatoryActive;
+    drawCurrentStaticRef.current?.();
+  }, [isObservatoryActive]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -498,6 +525,40 @@ export default function AtmosphericCanvas({
     const uTimeLoc = gl.getUniformLocation(program, "u_time");
     const uMouseLoc = gl.getUniformLocation(program, "u_mouse");
     const uRevealLoc = gl.getUniformLocation(program, "u_reveal");
+    const uObservatoryLoc = gl.getUniformLocation(program, "u_observatory");
+
+    // ------------------------------------------------------------------------
+    // DRAW FRAME
+    // ------------------------------------------------------------------------
+    const drawFrame = (time: number) => {
+      const stage = stageRef.current;
+      let reveal = 1.0;
+
+      if (stage === "signal_detected") {
+        reveal = 1.25;
+      } else if (stage === "dimensional_resonance") {
+        reveal = 1.65;
+      } else if (stage === "origin_synchronized") {
+        reveal = observatoryRef.current ? 1.32 : 1.45;
+      }
+
+      gl.useProgram(program);
+      gl.bindVertexArray(vao);
+
+      if (uTimeLoc) gl.uniform1f(uTimeLoc, time);
+      if (uMouseLoc) gl.uniform2f(uMouseLoc, mouse.x, mouse.y);
+      if (uRevealLoc) gl.uniform1f(uRevealLoc, reveal);
+      if (uObservatoryLoc) gl.uniform1f(uObservatoryLoc, observatoryMixRef.current);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    };
+
+    drawCurrentStaticRef.current = () => {
+      if (prefersReducedMotion) {
+        observatoryMixRef.current = observatoryRef.current ? 1 : 0;
+        drawFrame(18.0);
+      }
+    };
 
     // ------------------------------------------------------------------------
     // RESIZE & DPR MANAGEMENT (Capped at 2.0x)
@@ -519,37 +580,13 @@ export default function AtmosphericCanvas({
       }
 
       if (prefersReducedMotion) {
+        observatoryMixRef.current = observatoryRef.current ? 1 : 0;
         drawFrame(18.0);
       }
     };
 
     handleResize();
     window.addEventListener("resize", handleResize);
-
-    // ------------------------------------------------------------------------
-    // DRAW FRAME
-    // ------------------------------------------------------------------------
-    const drawFrame = (time: number) => {
-      const stage = stageRef.current;
-      let reveal = 1.0;
-
-      if (stage === "signal_detected") {
-        reveal = 1.25;
-      } else if (stage === "dimensional_resonance") {
-        reveal = 1.65;
-      } else if (stage === "origin_synchronized") {
-        reveal = 1.45;
-      }
-
-      gl.useProgram(program);
-      gl.bindVertexArray(vao);
-
-      if (uTimeLoc) gl.uniform1f(uTimeLoc, time);
-      if (uMouseLoc) gl.uniform2f(uMouseLoc, mouse.x, mouse.y);
-      if (uRevealLoc) gl.uniform1f(uRevealLoc, reveal);
-
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-    };
 
     // ------------------------------------------------------------------------
     // ANIMATION RAF LOOP (Delta-Time Integration with 0.1s Clamping)
@@ -568,6 +605,11 @@ export default function AtmosphericCanvas({
       mouse.x += (mouse.targetX - mouse.x) * 0.04;
       mouse.y += (mouse.targetY - mouse.y) * 0.04;
 
+      // Smooth framerate-independent camera zoom & expansion transition
+      const targetObs = observatoryRef.current ? 1 : 0;
+      observatoryMixRef.current +=
+        (targetObs - observatoryMixRef.current) * (1 - Math.exp(-delta * 2.2));
+
       drawFrame(globalTime);
 
       animId = requestAnimationFrame(loop);
@@ -581,6 +623,7 @@ export default function AtmosphericCanvas({
     // CLEANUP ON UNMOUNT
     // ------------------------------------------------------------------------
     return () => {
+      drawCurrentStaticRef.current = null;
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("visibilitychange", handleVisibilityChange);

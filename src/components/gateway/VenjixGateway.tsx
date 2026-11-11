@@ -17,11 +17,13 @@ interface VenjixGatewayProps {
   onGatewayInteract?: () => void;
   sequenceState?: CosmicSequenceState;
   isResonating?: boolean;
+  isObservatoryActive?: boolean;
 }
 
 export default function VenjixGateway({
   sequenceState = "idle",
   isResonating = false,
+  isObservatoryActive = false,
 }: VenjixGatewayProps) {
   const resolvedState: CosmicSequenceState =
     sequenceState !== "idle"
@@ -30,5 +32,10 @@ export default function VenjixGateway({
       ? "dimensional_resonance"
       : "idle";
 
-  return <AtmosphericCanvas sequenceStage={resolvedState} />;
+  return (
+    <AtmosphericCanvas
+      sequenceStage={resolvedState}
+      isObservatoryActive={isObservatoryActive}
+    />
+  );
 }
