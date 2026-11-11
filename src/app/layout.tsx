@@ -46,7 +46,11 @@ export const viewport: Viewport = {
  * 
  * Typed with Next.js 16 LayoutProps<"/"> for route-level type safety.
  */
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"

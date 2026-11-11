@@ -1,54 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /* ==========================================================================
-   VENJIX DESIGN SYSTEM — TAILWIND V4 CONFIGURATION
+   VENJIX DESIGN SYSTEM — NEW DIRECTION: COSMIC ETHEREAL
    --------------------------------------------------------------------------
    Product: VENJIX — A Multiverse Deepdive
+   Direction: Cosmic Ethereal — Encounter With An Unknown Dimension
    Tagline: BEYOND THE BOUNDARIES OF REALITY.
 
-   Defines the definitive multiverse color palette, typography font stacks,
-   and custom animation keyframes for the monumental Gateway experience.
+   Defines the rich cosmic palette (Cosmic Black, Deep Indigo, Midnight Purple,
+   Electric Violet, Luminous Lavender, Celestial White, Restrained Magenta),
+   organic fluid animation keyframes, and accessibility overrides.
    ========================================================================== */
 
-/* --------------------------------------------------------------------------
-   Typography Imports (Google Fonts)
-   Space Grotesk: Headings & monumental experimental display text.
-   Inter: Body copy, informational paragraphs, and secondary UI.
-   JetBrains Mono: Technical coordinates, telemetry telemetry, and HUD labels.
-   -------------------------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
-
 :root {
-  /* Core Venjix Color Palette */
-  --color-void: #08070D;              /* Deepest cosmic void background */
-  --color-void-secondary: #100D18;    /* Secondary elevation layer */
-  --color-abyss: #171022;             /* Shadow planes & deep structural elements */
-  --color-electric-purple: #7136D9;   /* High-energy multiversal conduits & active states */
-  --color-luminous-lavender: #B69AFF; /* Luminous resonance aura & highlighted typography */
-  --color-starlight: #E9E2F5;         /* Primary high-contrast text & focal points */
-  --color-muted-text: #A49AAF;        /* Subordinate telemetry, labels, & metadata */
-  --color-borders: #30243F;           /* Subtle containment frames & modular grid lines */
+  /* Core Cosmic Ethereal Palette */
+  --color-cosmic-black: #030206;       /* Absolute deep-space vacuum */
+  --color-deep-indigo: #0B081A;        /* Deep interstellar depth */
+  --color-midnight-purple: #181033;    /* Midnight cosmic nebula substrate */
+  --color-electric-violet: #6E32E3;    /* High-energy fluid filaments & ribbons */
+  --color-luminous-lavender: #BFA8FF;  /* Ethereal ribbon highlights & aura */
+  --color-celestial-white: #F3F0FA;    /* Pure starlight core & focal radiance */
+  --color-magenta-accent: #B829A0;     /* Restrained cosmic ionization accent */
+  --color-muted-text: #9F95B3;         /* Quiet celestial telemetry & micro-labels */
+  --color-borders: #2A1F45;            /* Subordinate translucent framing */
 
-  /* Font Stacks with robust fallbacks */
+  /* Legacy aliases mapped to the new cosmic palette */
+  --color-void: var(--color-cosmic-black);
+  --color-void-deep: var(--color-deep-indigo);
+  --color-abyss: var(--color-midnight-purple);
+  --color-dimensional-violet: #381A72;
+  --color-electric-purple: var(--color-electric-violet);
+  --color-starlight: var(--color-celestial-white);
+
+  /* Typography Font Stacks */
   --font-space-grotesk: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-jetbrains-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Default theme aliases */
-  --background: var(--color-void);
-  --foreground: var(--color-starlight);
+  /* Theme Root Bindings */
+  --background: var(--color-cosmic-black);
+  --foreground: var(--color-celestial-white);
 }
 
 @theme {
-  /* Color tokens available as bg-void, text-electric-purple, border-borders, etc. */
-  --color-void: #08070D;
-  --color-void-secondary: #100D18;
-  --color-abyss: #171022;
-  --color-electric-purple: #7136D9;
-  --color-luminous-lavender: #B69AFF;
-  --color-starlight: #E9E2F5;
-  --color-muted-text: #A49AAF;
-  --color-borders: #30243F;
+  --color-cosmic-black: #030206;
+  --color-deep-indigo: #0B081A;
+  --color-midnight-purple: #181033;
+  --color-electric-violet: #6E32E3;
+  --color-luminous-lavender: #BFA8FF;
+  --color-celestial-white: #F3F0FA;
+  --color-magenta-accent: #B829A0;
+  --color-muted-text: #9F95B3;
+  --color-borders: #2A1F45;
+
+  /* Backward-compatible utilities */
+  --color-void: #030206;
+  --color-starlight: #F3F0FA;
+  --color-electric-purple: #6E32E3;
 
   /* Typography tokens */
   --font-heading: var(--font-space-grotesk);
@@ -58,8 +67,8 @@
 
 /* Base Body Setup */
 body {
-  background-color: var(--color-void);
-  color: var(--color-starlight);
+  background-color: var(--color-cosmic-black);
+  color: var(--color-celestial-white);
   font-family: var(--font-inter);
   overflow-x: hidden;
   text-rendering: optimizeLegibility;
@@ -68,140 +77,135 @@ body {
 }
 
 /* ==========================================================================
-   CUSTOM ANIMATION KEYFRAMES & UTILITIES
+   COSMIC ETHEREAL ANIMATIONS
    --------------------------------------------------------------------------
-   Hardware-accelerated CSS animations driving the orbital motion of the
-   Gateway rings, energetic pulses of the Artifact, and telemetry flicker.
+   Fluid, organic wave undulations, flowing energy currents, and gentle
+   celestial pulsations. Completely avoids mechanical or rigid rotations.
    ========================================================================== */
 
-/* Slow clockwise rotation for outer gateway resonance rings */
-@keyframes gateway-spin-slow {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Counter-clockwise rotation for complementary geometric rings */
-@keyframes gateway-spin-reverse {
-  from {
-    transform: rotate(360deg);
-  }
-  to {
-    transform: rotate(0deg);
-  }
-}
-
-/* Pulsating breath for the central artifact symbol and energy focal point */
-@keyframes artifact-pulse {
+/* Gentle fluid undulation of primary cosmic energy ribbons */
+@keyframes ethereal-wave-1 {
   0%, 100% {
-    transform: scale(1);
-    filter: drop-shadow(0 0 18px rgba(113, 54, 217, 0.45)) drop-shadow(0 0 35px rgba(182, 154, 255, 0.25));
+    transform: translateY(0px) scaleY(1) rotate(0deg);
   }
   50% {
-    transform: scale(1.045);
-    filter: drop-shadow(0 0 32px rgba(113, 54, 217, 0.8)) drop-shadow(0 0 65px rgba(182, 154, 255, 0.5));
+    transform: translateY(-14px) scaleY(1.03) rotate(-0.5deg);
   }
 }
 
-/* Subtle energetic shimmer for conduit lines and glowing borders */
-@keyframes energy-shimmer {
-  0% {
-    opacity: 0.35;
-    stroke-dashoffset: 0;
+/* Secondary counter-flowing cosmic ribbon */
+@keyframes ethereal-wave-2 {
+  0%, 100% {
+    transform: translateY(0px) scaleY(1) rotate(0deg);
+  }
+  50% {
+    transform: translateY(12px) scaleY(0.97) rotate(0.6deg);
+  }
+}
+
+/* Ethereal light breathing: soft expansion of cosmic core illumination */
+@keyframes cosmic-breathe {
+  0%, 100% {
+    opacity: 0.65;
+    filter: drop-shadow(0 0 35px rgba(110, 50, 227, 0.45)) drop-shadow(0 0 80px rgba(191, 168, 255, 0.25));
+  }
+  50% {
+    opacity: 0.95;
+    filter: drop-shadow(0 0 60px rgba(110, 50, 227, 0.75)) drop-shadow(0 0 120px rgba(243, 240, 250, 0.5));
+  }
+}
+
+/* Shimmer of delicate ethereal filaments and star nodes */
+@keyframes filament-shimmer {
+  0%, 100% {
+    opacity: 0.45;
   }
   50% {
     opacity: 0.9;
-    stroke-dashoffset: 40;
-  }
-  100% {
-    opacity: 0.35;
-    stroke-dashoffset: 80;
   }
 }
 
-/* Subtle telemetry status flicker to emulate live dimensional instrumentation */
-@keyframes telemetry-blink {
+/* Slow drift of luminous interstellar clouds */
+@keyframes nebula-drift {
   0%, 100% {
-    opacity: 1;
+    transform: scale(1) translate(0, 0);
   }
   50% {
-    opacity: 0.35;
-  }
-}
-
-/* Ambient vertical drift for dimensional coordinate grids */
-@keyframes grid-drift {
-  0% {
-    background-position: 0 0;
-  }
-  100% {
-    background-position: 0 40px;
+    transform: scale(1.05) translate(-10px, -6px);
   }
 }
 
 /* Class-based animation hooks */
-.animate-gateway-slow {
-  animation: gateway-spin-slow 60s linear infinite;
+.animate-ethereal-wave-1 {
+  animation: ethereal-wave-1 16s ease-in-out infinite;
 }
 
-.animate-gateway-medium {
-  animation: gateway-spin-reverse 42s linear infinite;
+.animate-ethereal-wave-2 {
+  animation: ethereal-wave-2 20s ease-in-out infinite;
 }
 
-.animate-gateway-fast {
-  animation: gateway-spin-slow 24s linear infinite;
+.animate-cosmic-breathe {
+  animation: cosmic-breathe 8s ease-in-out infinite;
 }
 
-.animate-artifact-pulse {
-  animation: artifact-pulse 4.5s ease-in-out infinite;
+.animate-filament-shimmer {
+  animation: filament-shimmer 6s ease-in-out infinite;
 }
 
-.animate-energy-shimmer {
-  animation: energy-shimmer 3s ease-in-out infinite;
-}
-
-.animate-telemetry-blink {
-  animation: telemetry-blink 2.2s steps(2, start) infinite;
+.animate-nebula-drift {
+  animation: nebula-drift 32s ease-in-out infinite;
 }
 
 /* ==========================================================================
-   ATMOSPHERIC & PERSPECTIVE UTILITIES
+   COSMIC LIGHTING & GRADIENT UTILITIES
    --------------------------------------------------------------------------
-   Procedural grid patterns and perspective styling creating infinite depth.
+   Atmospheric vignetting, aurora radial gradients, and starlight text glow.
    ========================================================================== */
 
-/* Dimensional Vector Grid: Vanishing perspective ground plane */
-.dimensional-grid {
-  background-image: 
-    linear-gradient(to right, rgba(48, 36, 63, 0.35) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(48, 36, 63, 0.35) 1px, transparent 1px);
-  background-size: 40px 40px;
-  mask-image: radial-gradient(ellipse 65% 55% at 50% 50%, black 15%, transparent 80%);
-}
-
-/* CRT Scanline & Grain texture for multiversal terminal atmosphere */
-.scanline-overlay {
-  background: linear-gradient(
-    rgba(18, 16, 26, 0) 50%, 
-    rgba(8, 7, 13, 0.28) 50%
+/* Cosmic Depth Vignette: Darkens outer perimeter to focus on central phenomenon */
+.cosmic-vignette {
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(24, 16, 51, 0.15) 0%,
+    rgba(11, 8, 26, 0.5) 50%,
+    rgba(3, 2, 6, 0.95) 85%,
+    rgba(3, 2, 6, 1) 100%
   );
-  background-size: 100% 3px;
-  pointer-events: none;
 }
 
-/* Glowing text drop shadow filters */
-.text-glow-purple {
-  text-shadow: 0 0 16px rgba(113, 54, 217, 0.65), 0 0 35px rgba(182, 154, 255, 0.35);
+/* Core Aurora Phenomenon Radiance */
+.phenomenon-core-glow {
+  background: radial-gradient(
+    ellipse 65% 55% at 50% 50%,
+    rgba(243, 240, 250, 0.35) 0%,
+    rgba(191, 168, 255, 0.28) 25%,
+    rgba(110, 50, 227, 0.2) 50%,
+    rgba(184, 41, 160, 0.1) 70%,
+    transparent 100%
+  );
 }
 
-.text-glow-lavender {
-  text-shadow: 0 0 20px rgba(182, 154, 255, 0.8), 0 0 45px rgba(182, 154, 255, 0.4);
+/* Soft celestial typography glows */
+.text-glow-celestial {
+  text-shadow: 0 0 25px rgba(243, 240, 250, 0.75), 0 0 50px rgba(191, 168, 255, 0.45);
 }
 
-/* Radial portal energy glow */
-.portal-glow {
-  background: radial-gradient(circle, rgba(113, 54, 217, 0.28) 0%, rgba(23, 16, 34, 0.45) 45%, rgba(8, 7, 13, 0) 75%);
+.text-glow-violet {
+  text-shadow: 0 0 20px rgba(110, 50, 227, 0.8), 0 0 45px rgba(184, 41, 160, 0.4);
+}
+
+/* ==========================================================================
+   ACCESSIBILITY: PREFERS-REDUCED-MOTION
+   --------------------------------------------------------------------------
+   Halts all fluid undulations for users requiring motion safety.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .animate-ethereal-wave-1,
+  .animate-ethereal-wave-2,
+  .animate-cosmic-breathe,
+  .animate-filament-shimmer,
+  .animate-nebula-drift {
+    animation: none !important;
+    transition: none !important;
+  }
 }

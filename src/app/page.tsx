@@ -1,69 +1,94 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import React, { useState } from "react";
+import AtmosphericCanvas from "@/components/gateway/AtmosphericCanvas";
+import { CosmicSequenceState } from "@/components/gateway/CosmicPhenomenon";
+import TelemetryHUD from "@/components/gateway/TelemetryHUD";
+import InitiateContactButton from "@/components/gateway/InitiateContactButton";
+
+/**
+ * ============================================================================
+ * VENJIX — COSMIC ETHEREAL GATEWAY
+ * ============================================================================
+ * An Encounter With An Unknown Cosmic Dimension.
+ * 
+ * Product: VENJIX
+ * Subtitle: A Multiverse Deepdive
+ * Tagline: BEYOND THE BOUNDARIES OF REALITY.
+ * 
+ * Visual Architecture:
+ * - Native WebGL2 Domain-Warped Volumetric Nebula (AtmosphericCanvas).
+ * - Refined, lightweight cinematic typography integrated seamlessly into deep space.
+ * - Restrained perimeter telemetry without visual collision.
+ * - Approved CTA: INITIATE DISCOVERY.
+ */
+
+export default function VenjixCosmicGatewayPage() {
+  // Synchronizes the cosmic phenomenon radiance with the interaction state
+  const [sequenceStage, setSequenceStage] = useState<CosmicSequenceState>("idle");
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="relative min-h-screen w-full flex flex-col justify-between items-center bg-[#030206] text-[#F3F0FA] overflow-hidden select-none">
+      {/* --------------------------------------------------------------------
+          LAYER 0: NATIVE GPU DOMAIN-WARPED VOLUMETRIC NEBULA (WebGL2)
+          Continuous multi-octave domain-warped fBm with asymmetric gravitational
+          folding and volumetric dark dust extinction.
+          -------------------------------------------------------------------- */}
+      <AtmosphericCanvas sequenceStage={sequenceStage} />
+      <div className="pointer-events-none fixed inset-0 z-0 cosmic-vignette" />
+
+      {/* --------------------------------------------------------------------
+          LAYER 1: RESTRAINED CELESTIAL TELEMETRY
+          Quiet, peripheral editorial markers with zero text collision.
+          -------------------------------------------------------------------- */}
+      <TelemetryHUD />
+
+      {/* --------------------------------------------------------------------
+          LAYER 2: CINEMATIC REFINED BRAND HEADER
+          Lightweight, wide-tracked cinematic letterforms embedded into space.
+          -------------------------------------------------------------------- */}
+      <header className="relative z-20 w-full max-w-7xl pt-8 sm:pt-12 md:pt-14 px-6 sm:px-10 md:px-14 flex flex-col items-start">
+        {/* Celestial Anomaly Registry Indicator */}
+        <div className="flex items-center gap-2.5 mb-2 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.38em] text-[#9F95B3]/80 uppercase">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#BFA8FF] animate-pulse shadow-[0_0_8px_#BFA8FF]" />
+          <span>[ DIMENSION // UNKNOWN HARMONIC : ETHEREAL ]</span>
+        </div>
+
+        {/* Refined Cinematic Wordmark (Lightweight, Wide-Tracked) */}
+        <h1 className="font-[family-name:var(--font-space-grotesk)] text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-extralight tracking-[0.45em] sm:tracking-[0.52em] uppercase text-transparent bg-clip-text bg-gradient-to-r from-[#FFFFFF]/95 via-[#E9E2F5]/85 to-[#BFA8FF]/70 drop-shadow-[0_10px_35px_rgba(113,54,217,0.22)] select-none">
+          VENJIX
+        </h1>
+
+        {/* Monospace Cinematic Subtitle */}
+        <p className="mt-1.5 sm:mt-2.5 font-[family-name:var(--font-jetbrains-mono)] text-xs sm:text-sm tracking-[0.42em] sm:tracking-[0.52em] text-[#BFA8FF]/75 uppercase font-light">
+          A Multiverse Deepdive
+        </p>
+      </header>
+
+      {/* --------------------------------------------------------------------
+          LAYER 3: EXPANSIVE DIMENSIONAL NEGATIVE SPACE
+          Allows the viewer to be completely absorbed by the volumetric nebula.
+          -------------------------------------------------------------------- */}
+      <section
+        aria-label="The Cosmic Ethereal Environment"
+        className="relative z-10 flex flex-1 items-center justify-center w-full my-auto px-2 sm:px-6 py-2 sm:py-6 pointer-events-none"
+      />
+
+      {/* --------------------------------------------------------------------
+          LAYER 4: TAGLINE & CELESTIAL COMMUNION TRIGGER
+          Refined narrative tagline & the approved "INITIATE DISCOVERY" trigger.
+          -------------------------------------------------------------------- */}
+      <footer className="relative z-20 flex flex-col items-center text-center pb-8 sm:pb-12 md:pb-14 px-4 w-full max-w-2xl">
+        {/* Brand Tagline */}
+        <h2 className="font-[family-name:var(--font-space-grotesk)] text-xs sm:text-sm tracking-[0.32em] sm:tracking-[0.42em] text-[#F3F0FA]/90 uppercase font-light mb-6 sm:mb-8 text-glow-celestial">
+          BEYOND THE BOUNDARIES OF REALITY.
+        </h2>
+
+        {/* Ethereal Initiate Discovery Trigger */}
+        <InitiateContactButton
+          onSequenceChange={(stage) => setSequenceStage(stage)}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </footer>
+    </main>
   );
 }
