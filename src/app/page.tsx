@@ -54,8 +54,8 @@ export default function VenjixCosmicGatewayPage() {
           <span>[ DIMENSION // UNKNOWN HARMONIC : ETHEREAL ]</span>
         </div>
 
-        {/* Refined Cinematic Wordmark (Lightweight, Wide-Tracked) */}
-        <h1 className="font-[family-name:var(--font-space-grotesk)] text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-extralight tracking-[0.45em] sm:tracking-[0.52em] uppercase text-transparent bg-clip-text bg-gradient-to-r from-[#FFFFFF]/95 via-[#E9E2F5]/85 to-[#BFA8FF]/70 drop-shadow-[0_10px_35px_rgba(113,54,217,0.22)] select-none">
+        {/* Style 02 Razor-Sharp Sci-Fi Display Wordmark */}
+        <h1 className="font-[family-name:var(--font-orbitron)] text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-[0.25em] sm:tracking-[0.32em] uppercase text-transparent bg-clip-text bg-gradient-to-r from-[#FFFFFF] via-[#E9E2F5] to-[#B69AFF] drop-shadow-[0_0_22px_rgba(113,54,217,0.45)] select-none">
           VENJIX
         </h1>
 
