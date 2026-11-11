@@ -179,3 +179,47 @@ export interface CommuneResponsePayload {
   generatorSource: GeneratorSource;
 }
 
+/* ============================================================================
+ * Phase 3: Enigma / Parallel-Self Converse & Observer Identity Types
+ * ========================================================================== */
+
+export type EnigmaChannelMode = "enigma_oracle" | "parallel_self";
+
+export interface EnigmaConverseHistoryItem {
+  query: string;
+  response: string;
+}
+
+export interface EnigmaConverseRequest {
+  realityId: string;
+  realityTitle: string;
+  realitySynopsis: string;
+  isPersonalTimeline: boolean;
+  pivotalChoice?: string;
+  currentEpochSummary?: string;
+  mode: EnigmaChannelMode;
+  query: string;
+  history?: EnigmaConverseHistoryItem[];
+}
+
+export interface EnigmaConverseResponse {
+  transmission: string;
+  telemetry: {
+    temporalCoherence: string;
+    entropyDelta: string;
+    divergenceProbability: string;
+  };
+  mode: EnigmaChannelMode;
+  generatorSource: GeneratorSource;
+}
+
+export interface ObserverProfile {
+  observerHandle: string;
+  email?: string;
+  baselineContext: string;
+  authMode: "local" | "supabase";
+  syncedAt: string;
+  cloudUserId?: string;
+  passportSignature?: string;
+}
+

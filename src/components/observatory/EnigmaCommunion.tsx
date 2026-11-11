@@ -5,17 +5,18 @@ import {
   MAX_CUSTOM_REALITIES,
   RealityNode,
 } from "./realityData";
+import { synthesizeEnigmaConverseFallback } from "@/lib/multiverse/branchEngine";
 import type {
-  CommuneResponsePayload,
+  EnigmaChannelMode,
+  EnigmaConverseRequest,
+  EnigmaConverseResponse,
   GeneratorSource,
 } from "@/lib/multiverse/types";
 import {
-  EnigmaConduitMode,
   EnigmaEcho,
   EnigmaTelemetry,
   ResonanceProbe,
   getDimensionProfile,
-  synthesizeEnigmaResponse,
 } from "./enigmaEngine";
 import type { EnigmaActivityState } from "../gateway/AtmosphericCanvas";
 
@@ -50,6 +51,8 @@ interface EnigmaCommunionProps {
   onClose: () => void;
   onPhaseChange?: (state: EnigmaActivityState) => void;
   onCrystallizeDivergence?: (payload: CrystallizeDivergencePayload) => void;
+  initialEchoes?: EnigmaEcho[];
+  onEchoesChange?: (realityKey: string, nextEchoes: EnigmaEcho[]) => void;
   customNodeCount?: number;
   maxCustomNodes?: number;
 }
@@ -60,18 +63,21 @@ export default function EnigmaCommunion({
   onClose,
   onPhaseChange,
   onCrystallizeDivergence,
+  initialEchoes = [],
+  onEchoesChange,
   customNodeCount = 0,
   maxCustomNodes = MAX_CUSTOM_REALITIES,
 }: EnigmaCommunionProps) {
+  const realityKey = reality?.id ?? "global";
   const hasPersonalTimeline = Boolean(reality?.personalTimeline);
-  const defaultConduitMode: EnigmaConduitMode = hasPersonalTimeline
+  const defaultConduitMode: EnigmaChannelMode = hasPersonalTimeline
     ? "parallel_self"
-    : "oracle";
+    : "enigma_oracle";
 
   const initialProfile = getDimensionProfile(reality, defaultConduitMode);
 
   const [conduitMode, setConduitMode] =
-    useState<EnigmaConduitMode>(defaultConduitMode);
+    useState<EnigmaChannelMode>(defaultConduitMode);
   const [generatorSource, setGeneratorSource] =
     useState<GeneratorSource | null>(
       reality?.personalTimeline?.generatorSource ?? null
@@ -80,7 +86,7 @@ export default function EnigmaCommunion({
   const [telemetry, setTelemetry] = useState<EnigmaTelemetry>(
     initialProfile.initialTelemetry
   );
-  const [echoes, setEchoes] = useState<EnigmaEcho[]>([]);
+  const [echoes, setEchoes] = useState<EnigmaEcho[]>(() => initialEchoes);
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
   const [isCustomHypothesis, setIsCustomHypothesis] = useState<boolean>(false);
   const [activeText, setActiveText] = useState<string>(
@@ -241,24 +247,33 @@ export default function EnigmaCommunion({
   }, [phase]);
 
   /**
-   * Switches between +5 Year Parallel Self and Fate Oracle personas inside a Personal Timeline.
+   * Switches between Enigma Oracle and +5 Year Parallel Self channel modes.
    */
   const handleSwitchConduitMode = useCallback(
-    (nextMode: EnigmaConduitMode) => {
-      if (!reality?.personalTimeline || nextMode === conduitMode || phase === "synthesizing") {
+    (nextMode: EnigmaChannelMode) => {
+      if (nextMode === conduitMode || phase === "synthesizing") {
         return;
       }
       clearTimers();
 
       if (activeTextRef.current && activeQueryRef.current) {
-        const nextIndex = echoesRef.current.length + 1;
-        const archiveEntry: EnigmaEcho = {
-          id: `echo-${nextIndex}-${Date.now()}`,
-          query: activeQueryRef.current,
-          response: activeTextRef.current,
-          indexLabel: `ARCHIVE ECHO // ${String(nextIndex).padStart(2, "0")}`,
-        };
-        setEchoes((prev) => [...prev, archiveEntry]);
+        const alreadyArchived = echoesRef.current.some(
+          (item) =>
+            item.query === activeQueryRef.current &&
+            item.response === activeTextRef.current
+        );
+        if (!alreadyArchived) {
+          const nextIndex = echoesRef.current.length + 1;
+          const archiveEntry: EnigmaEcho = {
+            id: `echo-${nextIndex}-${Date.now()}`,
+            query: activeQueryRef.current,
+            response: activeTextRef.current,
+            indexLabel: `ARCHIVE ECHO // ${String(nextIndex).padStart(2, "0")}`,
+          };
+          const nextList = [...echoesRef.current, archiveEntry];
+          setEchoes(nextList);
+          onEchoesChange?.(realityKey, nextList);
+        }
       }
 
       const nextProfile = getDimensionProfile(reality, nextMode);
@@ -271,11 +286,11 @@ export default function EnigmaCommunion({
       setPhase("transmitting");
       setStreamRunId((id) => id + 1);
     },
-    [reality, conduitMode, phase, clearTimers]
+    [reality, realityKey, conduitMode, phase, clearTimers, onEchoesChange]
   );
 
   /**
-   * Dispatches a curated Resonance Probe or custom frequency query.
+   * Dispatches a curated Resonance Probe or custom frequency query via /api/enigma/converse.
    */
   const dispatchInquiry = useCallback(
     (queryText: string, curatedResponse?: { text: string; telemetry: EnigmaTelemetry }) => {
@@ -284,17 +299,26 @@ export default function EnigmaCommunion({
 
       clearTimers();
 
-      // Archive previous exchange cleanly as an Echo Log above the new transmission
+      // Archive previous completed exchange cleanly into Echo Logs above active transmission
+      let nextEchoBase = echoesRef.current;
       const prevResponse = activeTextRef.current;
-      if (prevResponse) {
-        const nextIndex = echoesRef.current.length + 1;
-        const archiveEntry: EnigmaEcho = {
-          id: `echo-${nextIndex}-${Date.now()}`,
-          query: activeQueryRef.current ?? (conduitMode === "parallel_self" && reality?.personalTimeline ? "PARALLEL SELF // OPENING SIGNAL" : "OPENING HARMONIC"),
-          response: prevResponse,
-          indexLabel: `ARCHIVE ECHO // ${String(nextIndex).padStart(2, "0")}`,
-        };
-        setEchoes((prev) => [...prev, archiveEntry]);
+      const prevQuery = activeQueryRef.current;
+      if (prevResponse && prevQuery) {
+        const alreadyArchived = nextEchoBase.some(
+          (item) => item.query === prevQuery && item.response === prevResponse
+        );
+        if (!alreadyArchived) {
+          const nextIndex = nextEchoBase.length + 1;
+          const archiveEntry: EnigmaEcho = {
+            id: `echo-${nextIndex}-${Date.now()}`,
+            query: prevQuery,
+            response: prevResponse,
+            indexLabel: `ARCHIVE ECHO // ${String(nextIndex).padStart(2, "0")}`,
+          };
+          nextEchoBase = [...nextEchoBase, archiveEntry];
+          setEchoes(nextEchoBase);
+          onEchoesChange?.(realityKey, nextEchoBase);
+        }
       }
 
       setActiveQuery(trimmed);
@@ -316,113 +340,114 @@ export default function EnigmaCommunion({
         }, 90);
       }
 
-      const nextEchoCount = echoesRef.current.length + 1;
       const personalBranch = reality?.personalTimeline;
 
-      if (!curatedResponse && personalBranch) {
-        const controller = new AbortController();
-        fetchAbortRef.current = controller;
-        const minPauseMs = prefersReducedMotion ? 100 : 460;
-        const startedAt = performance.now();
-        let timedOut = false;
-        const fetchTimeout = setTimeout(() => {
-          timedOut = true;
-          controller.abort();
-        }, 6500);
-
-        fetch("/api/multiverse/branch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            mode: "commune",
-            currentSelfContext: personalBranch.currentSelfContext,
-            pivotalChoice: personalBranch.pivotalChoice,
-            question: trimmed,
-            personaMode: conduitMode,
-            timelineSnapshot: {
-              title: personalBranch.title,
-              subtitle: personalBranch.subtitle,
-              pivotalChoice: personalBranch.pivotalChoice,
-              epochsSummary: personalBranch.epochs
-                .map((e) => `${e.yearLabel}: ${e.eraTitle} (${e.whoYouBecome})`)
-                .join(" | "),
-              metrics: personalBranch.metrics,
-            },
-          }),
-        })
-          .then(async (res) => {
-            if (!res.ok) {
-              throw new Error(`HTTP ${res.status}`);
-            }
-            return (await res.json()) as CommuneResponsePayload;
-          })
-          .then((data) => {
-            clearTimeout(fetchTimeout);
-            if (controller.signal.aborted) return;
-            const elapsed = performance.now() - startedAt;
-            const remaining = Math.max(0, minPauseMs - elapsed);
-            synthTimerRef.current = setTimeout(() => {
-              if (controller.signal.aborted) return;
-              if (synthTickRef.current !== null) {
-                clearInterval(synthTickRef.current);
-                synthTickRef.current = null;
-              }
-              synthTimerRef.current = null;
-              fetchAbortRef.current = null;
-              setGeneratorSource(data.generatorSource);
-              setTelemetry(data.telemetry);
-              setActiveText(data.transmission);
-              setRevealedChars(0);
-              setPhase("transmitting");
-              setStreamRunId((id) => id + 1);
-            }, remaining);
-          })
-          .catch((err: unknown) => {
-            clearTimeout(fetchTimeout);
-            if (controller.signal.aborted && !timedOut) return;
-            if (!timedOut && err instanceof Error && err.name === "AbortError") return;
-            if (synthTickRef.current !== null) {
-              clearInterval(synthTickRef.current);
-              synthTickRef.current = null;
-            }
-            fetchAbortRef.current = null;
-            const fallback = synthesizeEnigmaResponse(
-              reality,
-              trimmed,
-              nextEchoCount,
-              conduitMode
-            );
-            setGeneratorSource("fallback");
-            setTelemetry(fallback.telemetry);
-            setActiveText(fallback.text);
-            setRevealedChars(0);
-            setPhase("transmitting");
-            setStreamRunId((id) => id + 1);
-          });
-        return;
-      }
-
-      const synthDelay = prefersReducedMotion ? 120 : 880;
-      synthTimerRef.current = setTimeout(() => {
+      const publishResult = (
+        transmissionText: string,
+        nextTelemetry: EnigmaTelemetry,
+        source?: GeneratorSource
+      ) => {
         if (synthTickRef.current !== null) {
           clearInterval(synthTickRef.current);
           synthTickRef.current = null;
         }
-        synthTimerRef.current = null;
-
-        const result =
-          curatedResponse ??
-          synthesizeEnigmaResponse(reality, trimmed, nextEchoCount, conduitMode);
-
-        setTelemetry(result.telemetry);
-        setActiveText(result.text);
+        if (source) {
+          setGeneratorSource(source);
+        }
+        setTelemetry(nextTelemetry);
+        setActiveText(transmissionText);
         setRevealedChars(0);
         setPhase("transmitting");
         setStreamRunId((id) => id + 1);
-      }, synthDelay);
+
+        // Immediately persist latest exchange in Echo History without duplicating active UI row
+        const latestIndex = nextEchoBase.length + 1;
+        const persistedList: EnigmaEcho[] = [
+          ...nextEchoBase,
+          {
+            id: `echo-${latestIndex}-${Date.now()}`,
+            query: trimmed,
+            response: transmissionText,
+            indexLabel: `ARCHIVE ECHO // ${String(latestIndex).padStart(2, "0")}`,
+          },
+        ];
+        onEchoesChange?.(realityKey, persistedList);
+      };
+
+      if (curatedResponse) {
+        const synthDelay = prefersReducedMotion ? 120 : 720;
+        synthTimerRef.current = setTimeout(() => {
+          synthTimerRef.current = null;
+          publishResult(curatedResponse.text, curatedResponse.telemetry);
+        }, synthDelay);
+        return;
+      }
+
+      const conversePayload: EnigmaConverseRequest = {
+        realityId: reality?.id ?? "global",
+        realityTitle: reality?.title ?? "Unified Multiverse Network",
+        realitySynopsis:
+          reality?.synopsis ??
+          "Synchronized network of five foundational cosmic realities and observer-forged timelines.",
+        isPersonalTimeline: Boolean(personalBranch),
+        pivotalChoice: personalBranch?.pivotalChoice,
+        currentEpochSummary: personalBranch
+          ? personalBranch.epochs
+              .map((e) => `${e.yearLabel}: ${e.eraTitle} (${e.whoYouBecome})`)
+              .join(" | ")
+          : reality?.essence,
+        mode: conduitMode,
+        query: trimmed,
+        history: nextEchoBase.slice(-6).map((item) => ({
+          query: item.query,
+          response: item.response,
+        })),
+      };
+
+      const controller = new AbortController();
+      fetchAbortRef.current = controller;
+      const minPauseMs = prefersReducedMotion ? 100 : 420;
+      const startedAt = performance.now();
+      let timedOut = false;
+      const fetchTimeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, 6500);
+
+      fetch("/api/enigma/converse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify(conversePayload),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+          return (await res.json()) as EnigmaConverseResponse;
+        })
+        .then((data) => {
+          clearTimeout(fetchTimeout);
+          if (controller.signal.aborted) return;
+          const elapsed = performance.now() - startedAt;
+          const remaining = Math.max(0, minPauseMs - elapsed);
+          synthTimerRef.current = setTimeout(() => {
+            if (controller.signal.aborted) return;
+            synthTimerRef.current = null;
+            fetchAbortRef.current = null;
+            publishResult(data.transmission, data.telemetry, data.generatorSource);
+          }, remaining);
+        })
+        .catch((err: unknown) => {
+          clearTimeout(fetchTimeout);
+          if (controller.signal.aborted && !timedOut) return;
+          if (!timedOut && err instanceof Error && err.name === "AbortError") return;
+          fetchAbortRef.current = null;
+          const fallback = synthesizeEnigmaConverseFallback(conversePayload);
+          publishResult(fallback.transmission, fallback.telemetry, "fallback");
+        });
     },
-    [phase, clearTimers, reality, conduitMode]
+    [phase, clearTimers, reality, realityKey, conduitMode, onEchoesChange]
   );
 
   const handleProbeClick = (probe: ResonanceProbe) => {
@@ -754,44 +779,42 @@ export default function EnigmaCommunion({
               </span>
             </div>
 
-            {hasPersonalTimeline && (
-              <div
-                role="tablist"
-                aria-label="Communion Persona Mode"
-                className="mt-2 inline-flex flex-wrap items-center justify-center gap-1.5 p-1 rounded-full bg-[#0A0618]/70 border border-[#C2B0FF]/25 backdrop-blur-md"
+            <div
+              role="tablist"
+              aria-label="Communion Channel Mode"
+              className="mt-2 inline-flex flex-wrap items-center justify-center gap-1.5 p-1 rounded-full bg-[#0A0618]/70 border border-[#C2B0FF]/25 backdrop-blur-md"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={conduitMode === "enigma_oracle"}
+                tabIndex={tabIndex}
+                disabled={phase === "synthesizing"}
+                onClick={() => handleSwitchConduitMode("enigma_oracle")}
+                className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] tracking-[0.18em] uppercase transition-all cursor-pointer disabled:opacity-50 ${
+                  conduitMode === "enigma_oracle"
+                    ? "bg-[#0284C7]/35 border border-[#38BDF8]/65 text-[#FFFFFF] shadow-[0_0_16px_rgba(56,189,248,0.3)]"
+                    : "border border-transparent text-[#9F95B3] hover:text-[#F6F3FE]"
+                }`}
               >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={conduitMode === "parallel_self"}
-                  tabIndex={tabIndex}
-                  disabled={phase === "synthesizing"}
-                  onClick={() => handleSwitchConduitMode("parallel_self")}
-                  className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] tracking-[0.18em] uppercase transition-all cursor-pointer disabled:opacity-50 ${
-                    conduitMode === "parallel_self"
-                      ? "bg-[#7136D9]/40 border border-[#C2B0FF]/70 text-[#FFFFFF] shadow-[0_0_16px_rgba(194,176,255,0.35)]"
-                      : "border border-transparent text-[#9F95B3] hover:text-[#F6F3FE]"
-                  }`}
-                >
-                  [ PARALLEL SELF {"//"} +5 YEARS ]
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={conduitMode === "oracle"}
-                  tabIndex={tabIndex}
-                  disabled={phase === "synthesizing"}
-                  onClick={() => handleSwitchConduitMode("oracle")}
-                  className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] tracking-[0.18em] uppercase transition-all cursor-pointer disabled:opacity-50 ${
-                    conduitMode === "oracle"
-                      ? "bg-[#0284C7]/35 border border-[#38BDF8]/65 text-[#FFFFFF] shadow-[0_0_16px_rgba(56,189,248,0.3)]"
-                      : "border border-transparent text-[#9F95B3] hover:text-[#F6F3FE]"
-                  }`}
-                >
-                  [ FATE ORACLE {"//"} TRADE-OFFS ]
-                </button>
-              </div>
-            )}
+                [ CHANNEL: THE ENIGMA ORACLE ]
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={conduitMode === "parallel_self"}
+                tabIndex={tabIndex}
+                disabled={phase === "synthesizing"}
+                onClick={() => handleSwitchConduitMode("parallel_self")}
+                className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] tracking-[0.18em] uppercase transition-all cursor-pointer disabled:opacity-50 ${
+                  conduitMode === "parallel_self"
+                    ? "bg-[#7136D9]/40 border border-[#C2B0FF]/70 text-[#FFFFFF] shadow-[0_0_16px_rgba(194,176,255,0.35)]"
+                    : "border border-transparent text-[#9F95B3] hover:text-[#F6F3FE]"
+                }`}
+              >
+                [ CHANNEL: PARALLEL SELF (+5 YRS) ]
+              </button>
+            </div>
           </div>
         </div>
 
@@ -837,11 +860,11 @@ export default function EnigmaCommunion({
               isStreaming ? "cursor-pointer" : ""
             }`}
           >
-            {hasPersonalTimeline && !activeQuery && (
+            {!activeQuery && (
               <div className="mb-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.22em] text-[#C2B0FF]/85 uppercase">
                 {conduitMode === "parallel_self"
-                  ? "DIRECT CONDUIT // PARALLEL SELF (+5 YEARS IN TIMELINE)"
-                  : "ORACLE TRACE // HIDDEN TRADE-OFFS & CAUSAL ENTROPY"}
+                  ? "DIRECT CONDUIT // PARALLEL SELF (+5 YRS INSIDE TIMELINE)"
+                  : "ORACLE TRACE // THE ENIGMA & CAUSAL ENTROPY"}
               </div>
             )}
             {activeQuery && (
@@ -942,11 +965,9 @@ export default function EnigmaCommunion({
               onChange={(e) => setQueryInput(e.target.value)}
               disabled={phase === "synthesizing"}
               placeholder={
-                hasPersonalTimeline
-                  ? conduitMode === "parallel_self"
-                    ? "ASK YOUR +5 YEAR SELF ABOUT DAILY LIFE, REGRETS, OR REWARDS..."
-                    : "ASK THE FATE ORACLE TO EXPOSE HIDDEN TRADE-OFFS ALONG THIS PATH..."
-                  : "TRANSMIT QUERY OR DIVERGENCE HYPOTHESIS..."
+                conduitMode === "parallel_self"
+                  ? "ASK YOUR +5 YEAR SELF ABOUT DAILY LIFE, REGRETS, OR REWARDS..."
+                  : "ASK THE ENIGMA ORACLE TO EXPOSE TRADE-OFFS OR HYPOTHESES..."
               }
               aria-label="Transmit query or divergence hypothesis to The Enigma"
               className="flex-1 py-2 bg-transparent font-[family-name:var(--font-jetbrains-mono)] text-[11px] sm:text-xs tracking-[0.12em] text-[#F6F3FE] placeholder:text-[#9F95B3]/45 focus:outline-none disabled:opacity-50"

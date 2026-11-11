@@ -30,8 +30,14 @@ interface ObservatoryNavbarProps {
   onOpenEnigma?: () => void;
   /** Opens the Forge Personal Divergence modal to simulate a life-choice timeline */
   onOpenForge?: () => void;
+  /** Opens the Observer Identity Synchronization modal */
+  onOpenObserver?: () => void;
+  /** Active Observer handle shown in the navbar status pill */
+  observerHandle?: string;
   /** Whether Enigma Communion overlay is currently engaged */
   isEnigmaOpen?: boolean;
+  /** Whether Observer Identity modal is currently engaged */
+  isObserverOpen?: boolean;
   /** Callback to smoothly collapse back into the Cosmic Gateway */
   onExitGateway: () => void;
   /** Controls keyboard focusability while Observatory is hidden */
@@ -45,7 +51,10 @@ export default function ObservatoryNavbar({
   onHoverReality,
   onOpenEnigma,
   onOpenForge,
+  onOpenObserver,
+  observerHandle = "GUEST-01",
   isEnigmaOpen = false,
+  isObserverOpen = false,
   onExitGateway,
   isInteractive = true,
 }: ObservatoryNavbarProps) {
@@ -54,7 +63,7 @@ export default function ObservatoryNavbar({
   return (
     <nav
       aria-label="Cosmic Observatory Navigation"
-      className="relative z-30 w-full max-w-5xl mx-auto pt-4 sm:pt-6 px-3 sm:px-6 flex flex-col items-center gap-2"
+      className="relative z-30 w-full max-w-6xl mx-auto pt-4 sm:pt-6 px-3 sm:px-6 flex flex-col items-center gap-2"
     >
       {/* Floating Translucent Orbital Capsule */}
       <div className="relative w-full flex items-center justify-between gap-2 sm:gap-3 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-full bg-[#0A0618]/45 border border-[#C2B0FF]/18 backdrop-blur-xl shadow-[0_12px_40px_rgba(3,2,6,0.72),0_0_28px_rgba(113,54,217,0.14)]">
@@ -143,12 +152,32 @@ export default function ObservatoryNavbar({
           })}
         </div>
 
-        {/* Right Telemetry Indicator, Forge Choice, Enigma Communion & Gateway Exit */}
-        <div className="shrink-0 flex items-center gap-2 sm:gap-2.5">
-          <div className="hidden xl:flex items-center gap-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.22em] text-[#C2B0FF]/80 uppercase">
+        {/* Right Telemetry Indicator, Observer Identity, Forge Choice, Enigma & Gateway Exit */}
+        <div className="shrink-0 flex items-center gap-2">
+          <div className="hidden 2xl:flex items-center gap-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.22em] text-[#C2B0FF]/80 uppercase">
             <span className="w-1.5 h-1.5 rounded-full bg-[#C2B0FF] animate-pulse shadow-[0_0_8px_#C2B0FF]" />
             <span>{nodes.length} REALITIES</span>
           </div>
+
+          {onOpenObserver && (
+            <button
+              type="button"
+              tabIndex={tabIndex}
+              onClick={onOpenObserver}
+              aria-pressed={isObserverOpen}
+              title="Synchronize Observer Identity, Life Baseline & Cloud/Local Vault"
+              className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full border font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.16em] uppercase transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70 ${
+                isObserverOpen
+                  ? "bg-[#7136D9]/40 border-[#F6F3FE]/70 text-[#FFFFFF] shadow-[0_0_16px_rgba(194,176,255,0.4)]"
+                  : "bg-[#0D0720]/70 hover:bg-[#190F3C]/85 border-[#C2B0FF]/35 hover:border-[#F6F3FE]/70 text-[#E9E2F5] hover:text-[#FFFFFF]"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] shadow-[0_0_8px_#38BDF8]" />
+              <span>
+                [ OBSERVER {"//"} {observerHandle} ]
+              </span>
+            </button>
+          )}
 
           {onOpenForge && (
             <button
@@ -227,6 +256,20 @@ export default function ObservatoryNavbar({
             </button>
           );
         })}
+        {onOpenObserver && (
+          <button
+            type="button"
+            tabIndex={tabIndex}
+            onClick={onOpenObserver}
+            aria-pressed={isObserverOpen}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#0D0720]/75 text-[#E9E2F5] border border-[#C2B0FF]/35 font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.14em] uppercase transition-colors cursor-pointer"
+          >
+            <span className="w-1 h-1 rounded-full bg-[#38BDF8]" />
+            <span>
+              OBSERVER {"//"} {observerHandle}
+            </span>
+          </button>
+        )}
         {onOpenForge && (
           <button
             type="button"

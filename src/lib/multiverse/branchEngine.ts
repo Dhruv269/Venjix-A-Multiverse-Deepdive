@@ -2,6 +2,8 @@ import type {
   BranchRequestPayload,
   CommuneResponsePayload,
   DecisionCrossroad,
+  EnigmaConverseRequest,
+  EnigmaConverseResponse,
   GeneratorSource,
   LifeEpoch,
   LifeEpochKey,
@@ -1020,6 +1022,73 @@ export function synthesizeDeterministicCommune(
       entropyDelta: `+${ent.toFixed(3)} ΔS`,
       divergenceProbability: `${div}.${(seed >>> 3) % 9}%`,
     },
+    generatorSource: "fallback",
+  };
+}
+
+export function synthesizeEnigmaConverseFallback(
+  req: EnigmaConverseRequest
+): EnigmaConverseResponse {
+  const cleanQuery = req.query.trim();
+  const qLower = cleanQuery.toLowerCase();
+  const title = req.realityTitle.trim() || "This Reality Horizon";
+  const seed = hashText(
+    `${req.realityId}|${req.mode}|${cleanQuery}|${req.history?.length ?? 0}`
+  );
+  const priorTurns = req.history?.length ?? 0;
+
+  let transmission = "";
+  if (req.mode === "parallel_self") {
+    const choicePhrase = req.pivotalChoice?.trim() || req.realitySynopsis.trim();
+    const epochHint = req.currentEpochSummary?.trim() || title;
+
+    if (req.isPersonalTimeline) {
+      if (/(day|daily|morning|routine|feel|life like|live)/.test(qLower)) {
+        transmission = `Five years inside "${title}" (${epochHint}), my mornings start slower than yours—more self-directed, less scripted by anyone else's calendar. I'm deep into work born straight out of "${choicePhrase}". I still miss the easy predictability and casual closeness with folks back in our original track, yet every honest scar here feels unmistakably mine.`;
+      } else if (/(worth|regret|miss|sacrifice|lose|lost|cost)/.test(qLower)) {
+        transmission = `If you want zero sugarcoating from Year +5 inside "${title}": yes, it cost us comfortable approval and a few relationships that only made sense on the old road. Certain quiet evenings still sting. Even so, watching what grew once we actually committed to "${choicePhrase}" makes it worth the bruises ten times over.`;
+      } else {
+        transmission = `Hearing "${cleanQuery}" from across the boundary hits weirdly close${
+          priorTurns > 0 ? " after what we've already talked through" : ""
+        }. Five years into living "${choicePhrase}", I stopped waiting for permission before building. You wouldn't recognize our calendar anymore, yet the core instinct is identical—just freed from second-guessing.`;
+      }
+    } else {
+      transmission = `Five subjective years inside ${title}, my sensory instincts have rewritten themselves around ${req.realitySynopsis.slice(0, 120).replace(/\.$/, "")}. Answering "${cleanQuery}": daily work here bends toward what you'd call impossible physics back on origin Earth—and though I quietly miss unhurried twilight coffee and simple gravity, stepping into this horizon was worth every disorienting week.`;
+    }
+  } else {
+    const synopsisCore = req.realitySynopsis.trim();
+    const choiceAnchor = req.pivotalChoice?.trim() || synopsisCore;
+
+    if (/(tradeoff|cost|sacrifice|risk|blind|danger|fail)/.test(qLower)) {
+      transmission = `Oracle ledger for "${title}": committing to "${choiceAnchor}" trades ambient comfort for sharp directional singularity. The concealed liability is compounding isolation and early volatility—yet avoiding the risk altogether carries its own quiet entropy: decades spent optimizing someone else's blueprint.`;
+    } else if (/(time|future|year|reverse|when|epoch|destiny)/.test(qLower)) {
+      transmission = `Across ${title}, causal momentum locks in rapidly past Month 18 (${
+        req.currentEpochSummary ?? "Emergence horizon"
+      }). Addressing "${cleanQuery}": trajectories rarely reverse cleanly once identity crystallizes around new proof, yet running a concrete 45-day asymmetric probe now reveals 80% of the friction without irreversible commitment.`;
+    } else {
+      transmission = `Enigma synthesis aligned on ${title}: your question ("${cleanQuery}") probes the structural hinge between intention and consequence${
+        priorTurns > 0 ? ` across ${priorTurns + 1} resonant exchanges` : ""
+      }. Follow where energy rises alongside honest fear—noise fades quickly inside ${title}, leaving only deliberate craft.`;
+    }
+  }
+
+  const coh = clamp(81 + (seed % 17), 65, 98);
+  const entPrefix = req.realityId === "null-09" ? "-" : "+";
+  const ent = clamp(0.11 + ((seed >>> 4) % 42) / 100, 0.08, 0.72);
+  const div = clamp(
+    (req.isPersonalTimeline ? 68 : 82) + ((seed >>> 8) % 28),
+    42,
+    99
+  );
+
+  return {
+    transmission,
+    telemetry: {
+      temporalCoherence: `${coh}.${seed % 9}%`,
+      entropyDelta: `${entPrefix}${ent.toFixed(3)} ΔS`,
+      divergenceProbability: `${div}.${(seed >>> 3) % 9}%`,
+    },
+    mode: req.mode,
     generatorSource: "fallback",
   };
 }

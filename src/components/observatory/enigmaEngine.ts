@@ -1,7 +1,10 @@
-import type { PersonalTimelineBranch } from "@/lib/multiverse/types";
+import type {
+  EnigmaChannelMode,
+  PersonalTimelineBranch,
+} from "@/lib/multiverse/types";
 import { RealityNode } from "./realityData";
 
-export type EnigmaConduitMode = "oracle" | "parallel_self";
+export type EnigmaConduitMode = EnigmaChannelMode | "oracle";
 
 /**
  * ============================================================================
@@ -402,17 +405,46 @@ export function getDimensionProfile(
   reality: RealityNode | null,
   mode: EnigmaConduitMode = "parallel_self"
 ): DimensionProfile {
-  if (!reality) return DIMENSION_PROFILES.global;
-  if (reality.personalTimeline) {
+  if (reality?.personalTimeline) {
     return getPersonalTimelineProfile(reality.personalTimeline, mode);
   }
-  if (DIMENSION_PROFILES[reality.id]) {
-    return DIMENSION_PROFILES[reality.id];
+
+  const baseProfile = !reality
+    ? DIMENSION_PROFILES.global
+    : DIMENSION_PROFILES[reality.id]
+      ? DIMENSION_PROFILES[reality.id]
+      : reality.isCustom
+        ? buildCustomDimensionProfile(reality)
+        : DIMENSION_PROFILES.global;
+
+  if (mode !== "parallel_self") {
+    return baseProfile;
   }
-  if (reality.isCustom) {
-    return buildCustomDimensionProfile(reality);
-  }
-  return DIMENSION_PROFILES.global;
+
+  const targetTitle = reality?.title ?? "the Unified Multiverse Nexus";
+  const targetEssence =
+    reality?.essence.toLowerCase() ?? "overlapping divergence horizons";
+
+  return {
+    openingTransmission: `Direct conduit open—I am speaking from five subjective years inside ${targetTitle}. Stepping across into a reality governed by ${targetEssence} rewired how my mornings, instincts, and ambitions feel from the inside. Ask me what daily life looks like here—or what I miss from home.`,
+    initialTelemetry: baseProfile.initialTelemetry,
+    probes: baseProfile.probes.map((probe, idx) => ({
+      ...probe,
+      id: `${probe.id}-parallel`,
+      label:
+        idx === 0
+          ? "How does your ordinary Tuesday feel five years inside here?"
+          : idx === 1
+            ? "What do you quietly miss most from our original timeline?"
+            : "Looking back after five years, was stepping across worth it?",
+      transmission:
+        idx === 0
+          ? `Mornings inside ${targetTitle} move to an alien rhythm compared to origin Earth. Work feels less like climbing someone else's ladder and more like tuning directly into ${targetEssence} until hours disappear.`
+          : idx === 1
+            ? `Even with everything I gained in ${targetTitle}, I still miss casual late-night talks back where nobody questioned our shared assumptions. You don't carry those unshared memories cleanly across five years of divergence.`
+            : `Yes—despite the dislocation of Year One, becoming someone shaped firsthand by ${targetTitle} cured the restlessness we felt before choosing. Only stay on the origin shore if certainty outweighs discovery.`,
+    })),
+  };
 }
 
 function hashQuerySeed(input: string): number {
