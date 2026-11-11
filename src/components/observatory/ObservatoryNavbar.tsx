@@ -62,26 +62,26 @@ export default function ObservatoryNavbar({
         />
 
         {/* Brand Anchor */}
-        <button
-          type="button"
-          onClick={onExitGateway}
-          tabIndex={tabIndex}
-          title="Return to Cosmic Gateway"
-          className="group shrink-0 flex items-center gap-2 text-left cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/60 rounded-full pr-1"
-        >
-          <ArtifactSymbol className="w-6 h-6 sm:w-7 sm:h-7 opacity-90 group-hover:opacity-100 transition-opacity" />
-          <div className="flex items-baseline gap-2">
+        <div className="group shrink-0 flex items-center gap-2 pr-1">
+          <ArtifactSymbol className="w-6 h-6 sm:w-7 sm:h-7 opacity-90 group-hover:opacity-100 transition-opacity shrink-0" />
+          <button
+            type="button"
+            onClick={onExitGateway}
+            tabIndex={tabIndex}
+            title="Return to Cosmic Gateway"
+            className="flex items-baseline gap-2 text-left cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/60 rounded-full"
+          >
             <span className="font-[family-name:var(--font-orbitron)] text-xs sm:text-sm font-bold tracking-[0.24em] text-[#FFFFFF] drop-shadow-[0_0_12px_rgba(113,54,217,0.45)]">
               VENJIX
             </span>
             <span className="hidden xl:inline font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.24em] text-[#9F95B3]/70 uppercase">
               / OBSERVATORY
             </span>
-          </div>
-        </button>
+          </button>
+        </div>
 
         {/* Desktop Constellation Network & Reality Quick-Switch Links */}
-        <div className="hidden md:flex items-center gap-0.5 lg:gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="hidden md:flex min-w-0 items-center gap-0.5 lg:gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
             tabIndex={tabIndex}

@@ -350,8 +350,8 @@ export default function EnigmaCommunion({
           : "opacity-0 scale-98 pointer-events-none"
       }`}
     >
-      {/* Inline CSS Keyframes Strictly for Singularity Glyph Interference */}
-      <style>{`
+      {/* Hoisted CSS Keyframes Strictly for Singularity Glyph Interference */}
+      <style href="venjix-enigma-keyframes" precedence="default">{`
         @keyframes enigma-orbit-cw {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
@@ -680,27 +680,27 @@ export default function EnigmaCommunion({
                 [ CLICK TEXT TO RESOLVE STREAM ]
               </span>
             )}
-
-            {canShowCrystallize && (
-              <div className="mt-3 pt-1 flex flex-wrap items-center gap-3">
-                {!hasReachedCustomCap ? (
-                  <button
-                    type="button"
-                    tabIndex={tabIndex}
-                    onClick={handleCrystallize}
-                    className="group relative inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-[#7136D9]/22 hover:bg-[#7136D9]/38 border border-[#C2B0FF]/45 hover:border-[#F6F3FE]/80 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.20em] text-[#F6F3FE] uppercase shadow-[0_0_20px_rgba(113,54,217,0.32)] hover:shadow-[0_0_28px_rgba(194,176,255,0.52)] transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] group-hover:bg-[#F6F3FE] animate-pulse shadow-[0_0_8px_#38BDF8]" />
-                    <span>[ + CRYSTALLIZE DIVERGENCE AS REALITY NODE ]</span>
-                  </button>
-                ) : (
-                  <span className="font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.20em] text-[#9F95B3]/70 uppercase">
-                    [ SESSION BRANCH LIMIT REACHED // {customNodeCount}/{maxCustomNodes} CUSTOM NODES ]
-                  </span>
-                )}
-              </div>
-            )}
           </div>
+
+          {canShowCrystallize && (
+            <div className="pt-1 flex flex-wrap items-center gap-3">
+              {!hasReachedCustomCap ? (
+                <button
+                  type="button"
+                  tabIndex={tabIndex}
+                  onClick={handleCrystallize}
+                  className="group relative inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-[#7136D9]/22 hover:bg-[#7136D9]/38 border border-[#C2B0FF]/45 hover:border-[#F6F3FE]/80 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.20em] text-[#F6F3FE] uppercase shadow-[0_0_20px_rgba(113,54,217,0.32)] hover:shadow-[0_0_28px_rgba(194,176,255,0.52)] transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]/70"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] group-hover:bg-[#F6F3FE] animate-pulse shadow-[0_0_8px_#38BDF8]" />
+                  <span>[ + CRYSTALLIZE DIVERGENCE AS REALITY NODE ]</span>
+                </button>
+              ) : (
+                <span className="font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.20em] text-[#9F95B3]/70 uppercase">
+                  [ SESSION BRANCH LIMIT REACHED // {customNodeCount}/{maxCustomNodes} CUSTOM NODES ]
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* BOTTOM INTERACTION ZONE: 3 Resonance Probes + Frequency Input Conduit */}

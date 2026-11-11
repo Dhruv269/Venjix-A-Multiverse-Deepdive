@@ -137,7 +137,7 @@ export default function RealityConstellation({
         className="relative w-full h-full will-change-transform"
       >
         {/* Scoped Pure-CSS Keyframes for Synaptic Energy Packets & Staggered Orb Coronas */}
-        <style>{`
+        <style href="venjix-constellation-keyframes" precedence="default">{`
           @keyframes synaptic-flow {
             from {
               stroke-dashoffset: 100;

@@ -11,7 +11,7 @@
  */
 
 export const MAX_CUSTOM_REALITIES = 3;
-export const CUSTOM_REALITIES_STORAGE_KEY = "venjix_custom_realities_v1";
+export const CUSTOM_REALITIES_STORAGE_KEY = "venjix_custom_realities_v2";
 
 /** Default signature Electric Violet/Lavender normalized RGB for Gateway & neutral Observatory */
 export const DEFAULT_OBSERVATORY_SPECTRUM: [number, number, number] = [
@@ -406,7 +406,7 @@ export function synthesizeCustomRealityNode(
   input: CustomRealitySynthesisInput
 ): { node: RealityNode; link: SynapticLink } {
   const slotNum = Math.max(1, Math.min(MAX_CUSTOM_REALITIES, input.customIndex));
-  const code = `USER-0${slotNum}`;
+  const code = `DIVERGENCE-0${slotNum}`;
   const parent =
     input.parentReality ??
     input.existingNodes.find((n) => n.id === "null-09") ??
@@ -414,7 +414,7 @@ export function synthesizeCustomRealityNode(
 
   const coords = selectOrganicCoordinate(parent, input.existingNodes);
   const palette = CUSTOM_PALETTE_SLOTS[(slotNum - 1) % CUSTOM_PALETTE_SLOTS.length];
-  const id = `user-0${slotNum}-${Date.now().toString(36)}`;
+  const id = `divergence-0${slotNum}-${Date.now().toString(36)}`;
   const cleanHypothesis = input.hypothesis.trim();
 
   const node: RealityNode = {
