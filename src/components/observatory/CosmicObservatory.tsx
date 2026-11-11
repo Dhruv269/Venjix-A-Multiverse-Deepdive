@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import ObservatoryNavbar from "./ObservatoryNavbar";
 import RealityConstellation from "./RealityConstellation";
 import RealityInspector from "./RealityInspector";
+import RealityBreachView from "./RealityBreachView";
 import EnigmaCommunion, {
   CrystallizeDivergencePayload,
 } from "./EnigmaCommunion";
@@ -59,6 +60,8 @@ export default function CosmicObservatory({
   );
   const [hoveredRealityId, setHoveredRealityId] = useState<string | null>(null);
   const [isEnigmaOpen, setIsEnigmaOpen] = useState<boolean>(false);
+  const [isBreachOpen, setIsBreachOpen] = useState<boolean>(false);
+  const [breachSession, setBreachSession] = useState<number>(0);
   const [newlyBornId, setNewlyBornId] = useState<string | null>(null);
 
   const bornTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -165,6 +168,17 @@ export default function CosmicObservatory({
     setIsEnigmaOpen(false);
   }, []);
 
+  const handleOpenBreach = useCallback(() => {
+    if (!selectedRealityId) return;
+    setHoveredRealityId(null);
+    setBreachSession((session) => session + 1);
+    setIsBreachOpen(true);
+  }, [selectedRealityId]);
+
+  const handleCloseBreach = useCallback(() => {
+    setIsBreachOpen(false);
+  }, []);
+
   const handleCrystallizeDivergence = useCallback(
     (payload: CrystallizeDivergencePayload) => {
       if (customNodes.length >= MAX_CUSTOM_REALITIES) return;
@@ -200,6 +214,7 @@ export default function CosmicObservatory({
       }
 
       setIsEnigmaOpen(false);
+      setIsBreachOpen(false);
       setHoveredRealityId(null);
       setSelectedRealityId(node.id);
       setNewlyBornId(node.id);
@@ -217,6 +232,7 @@ export default function CosmicObservatory({
 
   const handleExit = useCallback(() => {
     setIsEnigmaOpen(false);
+    setIsBreachOpen(false);
     setSelectedRealityId(null);
     setHoveredRealityId(null);
     setNewlyBornId(null);
@@ -225,7 +241,8 @@ export default function CosmicObservatory({
     onExitGateway();
   }, [onExitGateway, onSpectrumChange, onEnigmaStateChange]);
 
-  const isObservatoryLayerInteractive = isActive && !isEnigmaOpen;
+  const isObservatoryLayerInteractive =
+    isActive && !isEnigmaOpen && !isBreachOpen;
 
   return (
     <section
@@ -239,21 +256,32 @@ export default function CosmicObservatory({
       }`}
     >
       {/* Floating Translucent Navigation Capsule */}
-      <ObservatoryNavbar
-        nodes={allNodes}
-        selectedRealityId={selectedRealityId}
-        onSelectReality={handleToggleSelectReality}
-        onHoverReality={setHoveredRealityId}
-        onOpenEnigma={handleToggleEnigma}
-        isEnigmaOpen={isEnigmaOpen}
-        onExitGateway={handleExit}
-        isInteractive={isObservatoryLayerInteractive}
-      />
+      <div
+        inert={isBreachOpen || undefined}
+        className={`w-full transition-opacity duration-500 ${
+          isBreachOpen ? "opacity-0 pointer-events-none" : "opacity-100"
+        }`}
+      >
+        <ObservatoryNavbar
+          nodes={allNodes}
+          selectedRealityId={selectedRealityId}
+          onSelectReality={handleToggleSelectReality}
+          onHoverReality={setHoveredRealityId}
+          onOpenEnigma={handleToggleEnigma}
+          isEnigmaOpen={isEnigmaOpen}
+          onExitGateway={handleExit}
+          isInteractive={isObservatoryLayerInteractive}
+        />
+      </div>
 
       {/* Interactive Multiverse Network Stage */}
       <div
         className={`relative flex-1 w-full flex flex-col items-center justify-center px-4 sm:px-8 overflow-visible transition-opacity duration-700 ${
-          isEnigmaOpen ? "opacity-15 pointer-events-none" : "opacity-100"
+          isBreachOpen
+            ? "opacity-0 pointer-events-none"
+            : isEnigmaOpen
+              ? "opacity-15 pointer-events-none"
+              : "opacity-100"
         }`}
       >
         <RealityConstellation
@@ -285,13 +313,14 @@ export default function CosmicObservatory({
         onClose={handleClearSelection}
         onSelectReality={handleDirectSelectReality}
         onCommune={handleOpenEnigma}
+        onEnterBreach={handleOpenBreach}
         isObservatoryActive={isObservatoryLayerInteractive}
       />
 
       {/* Subtle Bottom Cosmic Telemetry Horizon */}
       <footer
         className={`pointer-events-none w-full flex items-center justify-between px-4 sm:px-8 pb-4 sm:pb-5 font-[family-name:var(--font-jetbrains-mono)] text-[8px] sm:text-[9px] tracking-[0.26em] text-[#9F95B3]/55 uppercase transition-opacity duration-500 ${
-          isEnigmaOpen ? "opacity-0" : "opacity-100"
+          isEnigmaOpen || isBreachOpen ? "opacity-0" : "opacity-100"
         }`}
       >
         <span>SYNAPTIC MATRIX // {allNodes.length} REALITIES ONLINE</span>
@@ -302,6 +331,18 @@ export default function CosmicObservatory({
             : "COHERENCE // HARMONIC"}
         </span>
       </footer>
+
+      {/* Interactive Dimensional Breach Simulation Viewport */}
+      {selectedReality && (
+        <RealityBreachView
+          key={`${selectedReality.id}-${breachSession}`}
+          reality={selectedReality}
+          isOpen={isActive && isBreachOpen}
+          isEnigmaOpen={isEnigmaOpen}
+          onExitBreach={handleCloseBreach}
+          onSummonEnigma={handleToggleEnigma}
+        />
+      )}
 
       {/* Dimensional Communion Interface ("The Enigma") */}
       <EnigmaCommunion

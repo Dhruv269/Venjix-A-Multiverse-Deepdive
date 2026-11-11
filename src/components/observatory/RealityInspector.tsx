@@ -29,6 +29,7 @@ interface RealityInspectorProps {
   onClose: () => void;
   onSelectReality: (realityId: string) => void;
   onCommune: () => void;
+  onEnterBreach?: () => void;
   isObservatoryActive: boolean;
 }
 
@@ -39,6 +40,7 @@ export default function RealityInspector({
   onClose,
   onSelectReality,
   onCommune,
+  onEnterBreach,
   isObservatoryActive,
 }: RealityInspectorProps) {
   const isVisible = Boolean(reality) && isObservatoryActive;
@@ -201,8 +203,30 @@ export default function RealityInspector({
               </div>
             )}
 
-            {/* Primary Enigma Communion Trigger */}
-            <div className="pt-1 flex items-center justify-between gap-3">
+            {/* Primary Action Conduits: Dimensional Breach Simulation & Enigma Communion */}
+            <div className="pt-1 flex flex-wrap items-center gap-3">
+              {onEnterBreach && (
+                <button
+                  type="button"
+                  tabIndex={tabIndex}
+                  onClick={onEnterBreach}
+                  style={{
+                    borderColor: `${reality.coreColor}66`,
+                    boxShadow: `0 0 24px ${reality.coreColor}38`,
+                  }}
+                  className="group relative flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-[#0C071E]/80 hover:bg-[#190F3C]/90 border font-[family-name:var(--font-jetbrains-mono)] text-[10px] sm:text-xs tracking-[0.2em] text-[#F6F3FE] uppercase transition-all duration-400 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#F6F3FE]/75"
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full animate-pulse"
+                    style={{
+                      backgroundColor: reality.coreColor,
+                      boxShadow: `0 0 10px ${reality.coreColor}`,
+                    }}
+                  />
+                  <span>[ ENTER DIMENSIONAL BREACH -&gt; ]</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 tabIndex={tabIndex}
