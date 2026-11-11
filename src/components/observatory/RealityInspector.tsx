@@ -30,6 +30,7 @@ interface RealityInspectorProps {
   onSelectReality: (realityId: string) => void;
   onCommune: () => void;
   onEnterBreach?: () => void;
+  onForgeBranchFromHere?: () => void;
   isObservatoryActive: boolean;
 }
 
@@ -41,6 +42,7 @@ export default function RealityInspector({
   onSelectReality,
   onCommune,
   onEnterBreach,
+  onForgeBranchFromHere,
   isObservatoryActive,
 }: RealityInspectorProps) {
   const isVisible = Boolean(reality) && isObservatoryActive;
@@ -176,6 +178,30 @@ export default function RealityInspector({
               </div>
             </div>
 
+            {reality.personalTimeline && (
+              <div className="py-2 px-3 rounded-xl bg-[#0D0720]/70 border border-[#C2B0FF]/25 flex flex-wrap items-center justify-between gap-2 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.18em] uppercase">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span className="text-[#9F95B3]">
+                    FULFILLMENT:{" "}
+                    <strong className="font-normal text-[#F6F3FE] tabular-nums">
+                      {reality.personalTimeline.metrics.fulfillment}%
+                    </strong>
+                  </span>
+                  <span className="text-[#9F95B3]">
+                    ENTROPY:{" "}
+                    <strong className="font-normal text-[#38BDF8] tabular-nums">
+                      {reality.personalTimeline.metrics.riskEntropy.toFixed(2)}
+                    </strong>
+                  </span>
+                </div>
+                <span className="text-[#C2B0FF]/80">
+                  {reality.personalTimeline.generatorSource === "fallback"
+                    ? "SYNTHESIS ENGINE"
+                    : `${reality.personalTimeline.generatorSource} CONDUIT`}
+                </span>
+              </div>
+            )}
+
             {/* Dimensional Lore Synopsis */}
             <p className="font-[family-name:var(--font-inter)] text-xs sm:text-[13px] leading-relaxed text-[#E9E2F5]/85 font-light">
               {reality.synopsis}
@@ -236,6 +262,22 @@ export default function RealityInspector({
                 <span className="w-1.5 h-1.5 rounded-full bg-[#C2B0FF] group-hover:bg-[#F6F3FE] group-hover:shadow-[0_0_10px_#F6F3FE] transition-all" />
                 <span>[ COMMUNE WITH THE ENIGMA -&gt; ]</span>
               </button>
+
+              {onForgeBranchFromHere && (
+                <button
+                  type="button"
+                  tabIndex={tabIndex}
+                  onClick={onForgeBranchFromHere}
+                  className="group relative flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#0284C7]/18 hover:bg-[#0284C7]/35 border border-[#38BDF8]/45 hover:border-[#F6F3FE]/75 font-[family-name:var(--font-jetbrains-mono)] text-[10px] sm:text-xs tracking-[0.18em] text-[#F6F3FE] uppercase shadow-[0_0_18px_rgba(56,189,248,0.22)] transition-all duration-400 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#38BDF8]/70"
+                >
+                  <span className="text-[#38BDF8] font-bold">+</span>
+                  <span>
+                    {reality.personalTimeline
+                      ? "[ SIMULATE SUB-CHOICE -> ]"
+                      : "[ FORGE LIFE DIVERGENCE -> ]"}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
         )}

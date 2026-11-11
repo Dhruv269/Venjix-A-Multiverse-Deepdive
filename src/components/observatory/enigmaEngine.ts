@@ -1,4 +1,7 @@
+import type { PersonalTimelineBranch } from "@/lib/multiverse/types";
 import { RealityNode } from "./realityData";
+
+export type EnigmaConduitMode = "oracle" | "parallel_self";
 
 /**
  * ============================================================================
@@ -347,8 +350,62 @@ function buildCustomDimensionProfile(reality: RealityNode): DimensionProfile {
   };
 }
 
-export function getDimensionProfile(reality: RealityNode | null): DimensionProfile {
+export function getPersonalTimelineProfile(
+  branch: PersonalTimelineBranch,
+  mode: EnigmaConduitMode
+): DimensionProfile {
+  const openingTransmission =
+    mode === "parallel_self"
+      ? branch.parallelPersona.openingFromFutureSelf
+      : branch.parallelPersona.enigmaTradeoffAnalysis;
+
+  const initialTelemetry: EnigmaTelemetry = {
+    temporalCoherence: `${branch.metrics.temporalCoherence.toFixed(1)}%`,
+    entropyDelta: `+${branch.metrics.riskEntropy.toFixed(3)} ΔS`,
+    divergenceProbability: `${branch.metrics.divergence.toFixed(1)}%`,
+  };
+
+  const probes: ResonanceProbe[] = branch.parallelPersona.parallelProbes.map(
+    (probe, idx) => ({
+      id: `${branch.id}-${mode}-${probe.id || idx}`,
+      label: probe.label,
+      transmission:
+        mode === "parallel_self" ? probe.futureSelfAnswer : probe.oracleAnswer,
+      telemetry: {
+        temporalCoherence: `${Math.min(
+          99.5,
+          Math.max(
+            68,
+            branch.metrics.temporalCoherence + (idx === 1 ? -1.4 : idx === 2 ? 0.9 : 0.4)
+          )
+        ).toFixed(1)}%`,
+        entropyDelta: `+${Math.max(
+          0.05,
+          branch.metrics.riskEntropy + (idx === 1 ? 0.042 : idx === 2 ? -0.028 : 0.014)
+        ).toFixed(3)} ΔS`,
+        divergenceProbability: `${Math.min(
+          99.4,
+          Math.max(45, branch.metrics.divergence + (idx === 2 ? 1.8 : 0.6))
+        ).toFixed(1)}%`,
+      },
+    })
+  );
+
+  return {
+    openingTransmission,
+    initialTelemetry,
+    probes,
+  };
+}
+
+export function getDimensionProfile(
+  reality: RealityNode | null,
+  mode: EnigmaConduitMode = "parallel_self"
+): DimensionProfile {
   if (!reality) return DIMENSION_PROFILES.global;
+  if (reality.personalTimeline) {
+    return getPersonalTimelineProfile(reality.personalTimeline, mode);
+  }
   if (DIMENSION_PROFILES[reality.id]) {
     return DIMENSION_PROFILES[reality.id];
   }
@@ -375,11 +432,44 @@ function hashQuerySeed(input: string): number {
 export function synthesizeEnigmaResponse(
   reality: RealityNode | null,
   rawQuery: string,
-  echoIndex: number
+  echoIndex: number,
+  conduitMode: EnigmaConduitMode = "parallel_self"
 ): { text: string; telemetry: EnigmaTelemetry } {
   const cleanQuery = rawQuery.trim();
   const q = cleanQuery.toLowerCase();
-  const seed = hashQuerySeed(`${reality?.id ?? "global"}:${q}:${echoIndex}`);
+  const seed = hashQuerySeed(`${reality?.id ?? "global"}:${conduitMode}:${q}:${echoIndex}`);
+
+  if (reality?.personalTimeline) {
+    const branch = reality.personalTimeline;
+    const yearFive =
+      branch.epochs.find((ep) => ep.yearOffset === 5) ??
+      branch.epochs[2] ??
+      branch.epochs[0];
+    const yearTen = branch.epochs[branch.epochs.length - 1] ?? yearFive;
+
+    const personalText =
+      conduitMode === "parallel_self"
+        ? `Speaking from Year +5 inside “${branch.title}” (${yearFive?.whereYouLive ?? "this branch"}): choosing “${branch.pivotalChoice}” made me ${yearFive?.whoYouBecome ?? "a very different builder"}. Regarding “${cleanQuery}” — the honest truth is that ${yearFive?.whatYouSacrificed ?? "the comfort you left behind"} still aches occasionally, yet seeing ${yearFive?.whatYouBuild ?? "our work"} stand proves why that leap had to happen.`
+        : `ORACLE TRACE [${branch.code} // ENTROPY ${branch.metrics.riskEntropy.toFixed(2)} // FULFILLMENT ${branch.metrics.fulfillment}%]: Evaluating “${cleanQuery}” along “${branch.pivotalChoice}” reveals a clear compound asymmetric trade-off. Short-term velocity concentrates inside ${yearFive?.whatYouBuild ?? "this path"}, while the hidden cost remains ${yearFive?.whatYouSacrificed ?? "opportunity inertia"}. By +10 Years (${yearTen?.eraTitle ?? "Horizon"}), stability settles at ${branch.metrics.temporalCoherence.toFixed(1)}%.`;
+
+    return {
+      text: personalText,
+      telemetry: {
+        temporalCoherence: `${Math.min(
+          99.6,
+          Math.max(68.0, branch.metrics.temporalCoherence + (((seed % 19) - 9) * 0.2))
+        ).toFixed(1)}%`,
+        entropyDelta: `+${Math.max(
+          0.08,
+          branch.metrics.riskEntropy + (((seed >> 2) % 11) - 5) * 0.012
+        ).toFixed(3)} ΔS`,
+        divergenceProbability: `${Math.min(
+          99.5,
+          Math.max(45.0, branch.metrics.divergence + (((seed >> 4) % 15) - 7) * 0.2)
+        ).toFixed(1)}%`,
+      },
+    };
+  }
 
   const scopeName = reality
     ? `${reality.code} (“${reality.title}”)`

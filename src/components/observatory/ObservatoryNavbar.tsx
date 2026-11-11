@@ -28,6 +28,8 @@ interface ObservatoryNavbarProps {
   onHoverReality?: (realityId: string | null) => void;
   /** Opens Dimensional Communion with The Enigma (scoped to active reality or multiverse) */
   onOpenEnigma?: () => void;
+  /** Opens the Forge Personal Divergence modal to simulate a life-choice timeline */
+  onOpenForge?: () => void;
   /** Whether Enigma Communion overlay is currently engaged */
   isEnigmaOpen?: boolean;
   /** Callback to smoothly collapse back into the Cosmic Gateway */
@@ -42,6 +44,7 @@ export default function ObservatoryNavbar({
   onSelectReality,
   onHoverReality,
   onOpenEnigma,
+  onOpenForge,
   isEnigmaOpen = false,
   onExitGateway,
   isInteractive = true,
@@ -140,12 +143,25 @@ export default function ObservatoryNavbar({
           })}
         </div>
 
-        {/* Right Telemetry Indicator, Enigma Communion & Gateway Exit */}
+        {/* Right Telemetry Indicator, Forge Choice, Enigma Communion & Gateway Exit */}
         <div className="shrink-0 flex items-center gap-2 sm:gap-2.5">
           <div className="hidden xl:flex items-center gap-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.22em] text-[#C2B0FF]/80 uppercase">
             <span className="w-1.5 h-1.5 rounded-full bg-[#C2B0FF] animate-pulse shadow-[0_0_8px_#C2B0FF]" />
             <span>{nodes.length} REALITIES</span>
           </div>
+
+          {onOpenForge && (
+            <button
+              type="button"
+              tabIndex={tabIndex}
+              onClick={onOpenForge}
+              title="Simulate a personal life choice to forge a new timeline"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0284C7]/20 hover:bg-[#0284C7]/35 border border-[#38BDF8]/45 hover:border-[#F6F3FE]/75 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.18em] text-[#F6F3FE] uppercase shadow-[0_0_14px_rgba(56,189,248,0.22)] transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#38BDF8]/70"
+            >
+              <span className="text-[#38BDF8] font-bold">+</span>
+              <span>FORGE CHOICE</span>
+            </button>
+          )}
 
           {onOpenEnigma && (
             <button
@@ -211,6 +227,17 @@ export default function ObservatoryNavbar({
             </button>
           );
         })}
+        {onOpenForge && (
+          <button
+            type="button"
+            tabIndex={tabIndex}
+            onClick={onOpenForge}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#0284C7]/20 hover:bg-[#0284C7]/35 text-[#F6F3FE] border border-[#38BDF8]/40 font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.16em] uppercase transition-colors cursor-pointer"
+          >
+            <span className="text-[#38BDF8]">+</span>
+            <span>FORGE</span>
+          </button>
+        )}
         {onOpenEnigma && (
           <button
             type="button"

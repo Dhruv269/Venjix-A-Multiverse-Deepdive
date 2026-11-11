@@ -10,8 +10,12 @@
  * clear top margin for ObservatoryNavbar and bottom margin for telemetry.
  */
 
-export const MAX_CUSTOM_REALITIES = 3;
-export const CUSTOM_REALITIES_STORAGE_KEY = "venjix_custom_realities_v2";
+import { DEFAULT_PERSONAL_NEXUS_BRANCH } from "@/lib/multiverse/branchEngine";
+import type { PersonalTimelineBranch } from "@/lib/multiverse/types";
+
+export const MAX_CUSTOM_REALITIES = 5;
+export const CUSTOM_REALITIES_STORAGE_KEY = "venjix_custom_realities_v4";
+export const USER_BASELINE_STORAGE_KEY = "venjix_user_baseline_v1";
 
 /** Default signature Electric Violet/Lavender normalized RGB for Gateway & neutral Observatory */
 export const DEFAULT_OBSERVATORY_SPECTRUM: [number, number, number] = [
@@ -46,6 +50,7 @@ export interface RealityNode {
   enigmaTransmission: string;
   isCustom?: boolean;
   parentNodeId?: string;
+  personalTimeline?: PersonalTimelineBranch;
 }
 
 export interface SynapticLink {
@@ -61,14 +66,14 @@ export const REALITY_NODES: RealityNode[] = [
   {
     id: "omega-01",
     code: "OMEGA-01",
-    category: "PERSONAL DIVERGENCE",
-    classification: "OMEGA-01 // PERSONAL DIVERGENCE",
-    title: "The Unchosen Threshold",
-    essence: "Counterfactual memory & parallel self",
-    divergence: "94.2%",
+    category: "PERSONAL NEXUS",
+    classification: "OMEGA-01 // PERSONAL NEXUS",
+    title: "Your Personal Nexus",
+    essence: "Origin anchor of your living life choices",
+    divergence: "12.0%",
     coreColor: "#C2B0FF",
     secondaryColor: "#7136D9",
-    auraColor: "rgba(194, 176, 255, 0.52)",
+    auraColor: "rgba(194, 176, 255, 0.56)",
     spectrum: [0.76, 0.62, 1.0],
     x: 225,
     y: 218,
@@ -77,14 +82,20 @@ export const REALITY_NODES: RealityNode[] = [
     orbitDurationSec: 22,
     labelPlacement: "bottom",
     telemetry: {
-      entropyIndex: "0.184 ΔS",
-      temporalDrift: "+4.72 τ",
-      resonanceStability: "96.4%",
+      entropyIndex: "0.340 ΔS",
+      temporalDrift: "0.00 τ // ORIGIN",
+      resonanceStability: "94.0%",
     },
     synopsis:
-      "A nearby counterfactual continuum seeded at the exact moment an unmade decision forked cleanly away from consensus time. Residual emotional echoes bleed across the boundary—ghostly recollections of rooms never entered and futures lived by a twin consciousness.",
+      "Your central origin coordinate inside VENJIX—holding your present momentum, habits, relationships, and unchosen options suspended in superposition. Enter this breach to inspect your baseline trajectory, or forge alternate life paths directly from here.",
     enigmaTransmission:
-      "COUNTERFACTUAL CARRIER LOCKED // ECHOING PARALLEL MEMORY SIGNATURE...",
+      "PERSONAL NEXUS SYNCHRONIZED // MONITORING ACTIVE LIFE BIFURCATIONS...",
+    personalTimeline: {
+      ...DEFAULT_PERSONAL_NEXUS_BRANCH,
+      coreColor: "#C2B0FF",
+      secondaryColor: "#7136D9",
+      spectralTint: [0.76, 0.62, 1.0],
+    },
   },
   {
     id: "chrono-04",
@@ -307,6 +318,8 @@ const ORBITAL_ANCHOR_SLOTS: Array<{ x: number; y: number }> = [
   { x: 866, y: 274 },
   { x: 356, y: 162 },
   { x: 642, y: 464 },
+  { x: 158, y: 122 },
+  { x: 842, y: 492 },
 ];
 
 function deriveBranchTitle(hypothesis: string, indexNum: number): string {
@@ -457,4 +470,114 @@ export function synthesizeCustomRealityNode(
 
   return { node, link };
 }
+
+function hexToAuraRgba(hex: string, alpha = 0.54): string {
+  const clean = hex.replace("#", "").trim();
+  if (clean.length !== 6) return `rgba(182, 154, 255, ${alpha})`;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return `rgba(182, 154, 255, ${alpha})`;
+  }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+export function createPersonalTimelineNode(
+  branch: PersonalTimelineBranch,
+  parentReality: RealityNode | null,
+  existingNodes: RealityNode[],
+  slotIndex: number
+): { node: RealityNode; link: SynapticLink } {
+  const parent =
+    parentReality ??
+    existingNodes.find((n) => n.id === "omega-01") ??
+    existingNodes[0];
+
+  const coords = selectOrganicCoordinate(parent, existingNodes);
+  const shortCode = branch.code.split("//")[0]?.trim() || `LIFE-0${slotIndex}`;
+  const existingIds = new Set(existingNodes.map((n) => n.id));
+  let uniqueId = `${branch.id}-${slotIndex}-${Date.now().toString(36)}`;
+  let bump = 1;
+  while (existingIds.has(uniqueId)) {
+    uniqueId = `${branch.id}-${slotIndex}-${Date.now().toString(36)}-${bump}`;
+    bump += 1;
+  }
+  const normalizedBranch: PersonalTimelineBranch = {
+    ...branch,
+    id: uniqueId,
+  };
+
+  const node: RealityNode = {
+    id: uniqueId,
+    code: shortCode,
+    category: branch.chosenOption ? "FORKED LIFE BRANCH" : "PARALLEL LIFE",
+    classification: branch.code,
+    title: branch.title,
+    essence: branch.subtitle,
+    divergence: `${branch.metrics.divergence}%`,
+    coreColor: branch.coreColor,
+    secondaryColor: branch.secondaryColor,
+    auraColor: hexToAuraRgba(branch.coreColor, 0.56),
+    spectrum: branch.spectralTint,
+    x: coords.x,
+    y: coords.y,
+    parallaxDepth: 0.94 + (slotIndex % 3) * 0.14,
+    pulseDelaySec: 0.35 * (slotIndex % 5),
+    orbitDurationSec: 18 + (slotIndex % 4) * 2,
+    labelPlacement: coords.y > 460 ? "top" : "bottom",
+    telemetry: {
+      entropyIndex: `${branch.metrics.riskEntropy.toFixed(2)} ΔS`,
+      temporalDrift: `${branch.metrics.fulfillment}% FULFILL`,
+      resonanceStability: `${branch.metrics.temporalCoherence}%`,
+    },
+    synopsis:
+      branch.epochs[2]?.narrative ??
+      branch.epochs[0]?.narrative ??
+      branch.subtitle,
+    enigmaTransmission: `PERSONAL TIMELINE ${shortCode} LOCKED // PARALLEL CONSCIOUSNESS ONLINE...`,
+    isCustom: true,
+    parentNodeId: parent.id,
+    personalTimeline: normalizedBranch,
+  };
+
+  const link: SynapticLink = {
+    id: `link-${parent.id}-${uniqueId}`,
+    sourceId: parent.id,
+    targetId: uniqueId,
+    curveOffset: slotIndex % 2 === 0 ? 36 : -36,
+    pulseDurationSec: 4.1,
+    pulseDelaySec: 0.25,
+  };
+
+  return { node, link };
+}
+
+export function updateRealityNodeWithBranch(
+  existing: RealityNode,
+  branch: PersonalTimelineBranch
+): RealityNode {
+  return {
+    ...existing,
+    title: existing.id === "omega-01" ? existing.title : branch.title,
+    essence: branch.subtitle,
+    divergence: `${branch.metrics.divergence}%`,
+    coreColor: branch.coreColor,
+    secondaryColor: branch.secondaryColor,
+    auraColor: hexToAuraRgba(branch.coreColor, 0.56),
+    spectrum: branch.spectralTint,
+    telemetry: {
+      entropyIndex: `${branch.metrics.riskEntropy.toFixed(2)} ΔS`,
+      temporalDrift: `${branch.metrics.fulfillment}% FULFILL`,
+      resonanceStability: `${branch.metrics.temporalCoherence}%`,
+    },
+    synopsis: branch.epochs[2]?.narrative ?? existing.synopsis,
+    personalTimeline: {
+      ...branch,
+      id: existing.id,
+      code: existing.id === "omega-01" ? existing.classification : branch.code,
+    },
+  };
+}
+
 

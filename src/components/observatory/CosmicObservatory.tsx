@@ -5,6 +5,7 @@ import ObservatoryNavbar from "./ObservatoryNavbar";
 import RealityConstellation from "./RealityConstellation";
 import RealityInspector from "./RealityInspector";
 import RealityBreachView from "./RealityBreachView";
+import ForgeTimelineModal from "./ForgeTimelineModal";
 import EnigmaCommunion, {
   CrystallizeDivergencePayload,
 } from "./EnigmaCommunion";
@@ -14,10 +15,13 @@ import {
   MAX_CUSTOM_REALITIES,
   REALITY_NODES,
   SYNAPTIC_LINKS,
+  USER_BASELINE_STORAGE_KEY,
   RealityNode,
   SynapticLink,
+  createPersonalTimelineNode,
   synthesizeCustomRealityNode,
 } from "./realityData";
+import type { PersonalTimelineBranch } from "@/lib/multiverse/types";
 import type { EnigmaActivityState } from "../gateway/AtmosphericCanvas";
 
 /**
@@ -61,23 +65,34 @@ export default function CosmicObservatory({
   const [hoveredRealityId, setHoveredRealityId] = useState<string | null>(null);
   const [isEnigmaOpen, setIsEnigmaOpen] = useState<boolean>(false);
   const [isBreachOpen, setIsBreachOpen] = useState<boolean>(false);
+  const [isForgeOpen, setIsForgeOpen] = useState<boolean>(false);
+  const [forgeSession, setForgeSession] = useState<number>(0);
   const [breachSession, setBreachSession] = useState<number>(0);
   const [newlyBornId, setNewlyBornId] = useState<string | null>(null);
+  const [userBaseline, setUserBaseline] = useState<string>(
+    "18-year-old CS engineering student building software & AI products"
+  );
 
   const bornTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Hydrate session-persisted custom user divergences safely after mount
+  // Hydrate session-persisted personal baseline & custom divergences safely after mount
   useEffect(() => {
     let rafId = 0;
     try {
+      const savedBaseline = window.sessionStorage.getItem(
+        USER_BASELINE_STORAGE_KEY
+      );
       const raw = window.sessionStorage.getItem(CUSTOM_REALITIES_STORAGE_KEY);
+      let restoredNodes: RealityNode[] | null = null;
+      let restoredLinks: SynapticLink[] | null = null;
+
       if (raw) {
         const parsed = JSON.parse(raw) as {
           nodes?: RealityNode[];
           links?: SynapticLink[];
         };
         if (Array.isArray(parsed?.nodes) && Array.isArray(parsed?.links)) {
-          const restoredNodes = parsed.nodes
+          const validNodes = parsed.nodes
             .filter(
               (n) =>
                 Boolean(n?.id) &&
@@ -89,16 +104,25 @@ export default function CosmicObservatory({
             .slice(0, MAX_CUSTOM_REALITIES);
           const validIds = new Set([
             ...REALITY_NODES.map((n) => n.id),
-            ...restoredNodes.map((n) => n.id),
+            ...validNodes.map((n) => n.id),
           ]);
-          const restoredLinks = parsed.links.filter(
+          restoredNodes = validNodes;
+          restoredLinks = parsed.links.filter(
             (l) => validIds.has(l.sourceId) && validIds.has(l.targetId)
           );
-          rafId = requestAnimationFrame(() => {
+        }
+      }
+
+      if (savedBaseline || restoredNodes) {
+        rafId = requestAnimationFrame(() => {
+          if (savedBaseline && savedBaseline.trim()) {
+            setUserBaseline(savedBaseline.trim());
+          }
+          if (restoredNodes && restoredLinks) {
             setCustomNodes(restoredNodes);
             setCustomLinks(restoredLinks);
-          });
-        }
+          }
+        });
       }
     } catch {
       // Ignore restricted or malformed sessionStorage
@@ -179,10 +203,151 @@ export default function CosmicObservatory({
     setIsBreachOpen(false);
   }, []);
 
+  const persistCustomRealities = useCallback(
+    (nodesToSave: RealityNode[], linksToSave: SynapticLink[]) => {
+      try {
+        window.sessionStorage.setItem(
+          CUSTOM_REALITIES_STORAGE_KEY,
+          JSON.stringify({
+            nodes: nodesToSave,
+            links: linksToSave,
+          })
+        );
+      } catch {
+        // Ignore restricted sessionStorage
+      }
+    },
+    []
+  );
+
+  const scheduleNewlyBornHighlight = useCallback((nodeId: string) => {
+    setNewlyBornId(nodeId);
+    if (bornTimerRef.current !== null) {
+      clearTimeout(bornTimerRef.current);
+    }
+    bornTimerRef.current = setTimeout(() => {
+      setNewlyBornId((curr) => (curr === nodeId ? null : curr));
+      bornTimerRef.current = null;
+    }, 4500);
+  }, []);
+
+  const handleOpenForge = useCallback(() => {
+    setHoveredRealityId(null);
+    setIsEnigmaOpen(false);
+    setIsBreachOpen(false);
+    setForgeSession((s) => s + 1);
+    setIsForgeOpen(true);
+  }, []);
+
+  const handleCloseForge = useCallback(() => {
+    setIsForgeOpen(false);
+  }, []);
+
+  const handleBaselineChange = useCallback((nextBaseline: string) => {
+    setUserBaseline(nextBaseline);
+    try {
+      window.sessionStorage.setItem(USER_BASELINE_STORAGE_KEY, nextBaseline);
+    } catch {
+      // Ignore restricted sessionStorage
+    }
+  }, []);
+
+  const appendOrRotateCustomNode = useCallback(
+    (node: RealityNode, link: SynapticLink) => {
+      let baseNodes = customNodes;
+      let baseLinks = customLinks;
+      let nextNode = node;
+      let nextLink = link;
+
+      if (baseNodes.length >= MAX_CUSTOM_REALITIES) {
+        const evictedId = baseNodes[0].id;
+        baseNodes = baseNodes.slice(1);
+        baseLinks = baseLinks.filter(
+          (l) => l.sourceId !== evictedId && l.targetId !== evictedId
+        );
+        if (nextLink.sourceId === evictedId) {
+          nextNode = { ...nextNode, parentNodeId: "omega-01" };
+          nextLink = {
+            ...nextLink,
+            id: `link-omega-01-${nextNode.id}`,
+            sourceId: "omega-01",
+          };
+        }
+      }
+
+      const nextCustomNodes = [...baseNodes, nextNode];
+      const nextCustomLinks = [...baseLinks, nextLink];
+      setCustomNodes(nextCustomNodes);
+      setCustomLinks(nextCustomLinks);
+      persistCustomRealities(nextCustomNodes, nextCustomLinks);
+      return nextNode;
+    },
+    [customNodes, customLinks, persistCustomRealities]
+  );
+
+  const handleTimelineForged = useCallback(
+    (branch: PersonalTimelineBranch, enterBreachImmediately: boolean) => {
+      const parentReality =
+        allNodes.find((n) => n.id === selectedRealityId) ??
+        allNodes.find((n) => n.id === "omega-01") ??
+        null;
+
+      const { node, link } = createPersonalTimelineNode(
+        branch,
+        parentReality,
+        allNodes,
+        customNodes.length + 1
+      );
+
+      const savedNode = appendOrRotateCustomNode(node, link);
+
+      setIsForgeOpen(false);
+      setIsEnigmaOpen(false);
+      setHoveredRealityId(null);
+      setSelectedRealityId(savedNode.id);
+      scheduleNewlyBornHighlight(savedNode.id);
+
+      if (enterBreachImmediately) {
+        setBreachSession((session) => session + 1);
+        setIsBreachOpen(true);
+      }
+    },
+    [
+      allNodes,
+      customNodes.length,
+      selectedRealityId,
+      appendOrRotateCustomNode,
+      scheduleNewlyBornHighlight,
+    ]
+  );
+
+  const handleBreachDecision = useCallback(
+    (mutatedBranch: PersonalTimelineBranch) => {
+      const parentReality =
+        allNodes.find((n) => n.id === selectedRealityId) ?? null;
+
+      const { node, link } = createPersonalTimelineNode(
+        mutatedBranch,
+        parentReality,
+        allNodes,
+        customNodes.length + 1
+      );
+
+      const savedNode = appendOrRotateCustomNode(node, link);
+      setSelectedRealityId(savedNode.id);
+      scheduleNewlyBornHighlight(savedNode.id);
+    },
+    [
+      allNodes,
+      customNodes.length,
+      selectedRealityId,
+      appendOrRotateCustomNode,
+      scheduleNewlyBornHighlight,
+    ]
+  );
+
   const handleCrystallizeDivergence = useCallback(
     (payload: CrystallizeDivergencePayload) => {
-      if (customNodes.length >= MAX_CUSTOM_REALITIES) return;
-
       const parentReality =
         allNodes.find((n) => n.id === payload.parentRealityId) ?? null;
 
@@ -192,47 +357,29 @@ export default function CosmicObservatory({
         telemetry: payload.telemetry,
         parentReality,
         existingNodes: allNodes,
-        customIndex: customNodes.length + 1,
+        customIndex: Math.min(MAX_CUSTOM_REALITIES, customNodes.length + 1),
       });
 
-      const nextCustomNodes = [...customNodes, node];
-      const nextCustomLinks = [...customLinks, link];
-
-      setCustomNodes(nextCustomNodes);
-      setCustomLinks(nextCustomLinks);
-
-      try {
-        window.sessionStorage.setItem(
-          CUSTOM_REALITIES_STORAGE_KEY,
-          JSON.stringify({
-            nodes: nextCustomNodes,
-            links: nextCustomLinks,
-          })
-        );
-      } catch {
-        // Ignore restricted sessionStorage
-      }
+      const savedNode = appendOrRotateCustomNode(node, link);
 
       setIsEnigmaOpen(false);
       setIsBreachOpen(false);
       setHoveredRealityId(null);
-      setSelectedRealityId(node.id);
-      setNewlyBornId(node.id);
-
-      if (bornTimerRef.current !== null) {
-        clearTimeout(bornTimerRef.current);
-      }
-      bornTimerRef.current = setTimeout(() => {
-        setNewlyBornId((curr) => (curr === node.id ? null : curr));
-        bornTimerRef.current = null;
-      }, 4500);
+      setSelectedRealityId(savedNode.id);
+      scheduleNewlyBornHighlight(savedNode.id);
     },
-    [allNodes, customNodes, customLinks]
+    [
+      allNodes,
+      customNodes.length,
+      appendOrRotateCustomNode,
+      scheduleNewlyBornHighlight,
+    ]
   );
 
   const handleExit = useCallback(() => {
     setIsEnigmaOpen(false);
     setIsBreachOpen(false);
+    setIsForgeOpen(false);
     setSelectedRealityId(null);
     setHoveredRealityId(null);
     setNewlyBornId(null);
@@ -242,7 +389,7 @@ export default function CosmicObservatory({
   }, [onExitGateway, onSpectrumChange, onEnigmaStateChange]);
 
   const isObservatoryLayerInteractive =
-    isActive && !isEnigmaOpen && !isBreachOpen;
+    isActive && !isEnigmaOpen && !isBreachOpen && !isForgeOpen;
 
   return (
     <section
@@ -257,9 +404,11 @@ export default function CosmicObservatory({
     >
       {/* Floating Translucent Navigation Capsule */}
       <div
-        inert={isBreachOpen || undefined}
+        inert={isBreachOpen || isForgeOpen || undefined}
         className={`w-full transition-opacity duration-500 ${
-          isBreachOpen ? "opacity-0 pointer-events-none" : "opacity-100"
+          isBreachOpen || isForgeOpen
+            ? "opacity-0 pointer-events-none"
+            : "opacity-100"
         }`}
       >
         <ObservatoryNavbar
@@ -268,6 +417,7 @@ export default function CosmicObservatory({
           onSelectReality={handleToggleSelectReality}
           onHoverReality={setHoveredRealityId}
           onOpenEnigma={handleToggleEnigma}
+          onOpenForge={handleOpenForge}
           isEnigmaOpen={isEnigmaOpen}
           onExitGateway={handleExit}
           isInteractive={isObservatoryLayerInteractive}
@@ -279,7 +429,7 @@ export default function CosmicObservatory({
         className={`relative flex-1 w-full flex flex-col items-center justify-center px-4 sm:px-8 overflow-visible transition-opacity duration-700 ${
           isBreachOpen
             ? "opacity-0 pointer-events-none"
-            : isEnigmaOpen
+            : isEnigmaOpen || isForgeOpen
               ? "opacity-15 pointer-events-none"
               : "opacity-100"
         }`}
@@ -295,14 +445,25 @@ export default function CosmicObservatory({
           isInteractive={isObservatoryLayerInteractive}
         />
 
-        {/* Quiet Guidance Prompt When Exploring Constellation Overview */}
-        <p
-          className={`pointer-events-none mt-1 sm:mt-2 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.26em] text-[#9F95B3]/70 uppercase text-center transition-opacity duration-500 ${
-            selectedReality ? "opacity-0" : "opacity-100"
+        {/* Quiet Guidance Prompt + Personal Life-Choice Multiverse Portal */}
+        <div
+          className={`mt-1 sm:mt-2 flex flex-col items-center gap-2.5 transition-opacity duration-500 ${
+            selectedReality ? "opacity-0 pointer-events-none" : "opacity-100"
           }`}
         >
-          SELECT AN ALTERNATE REALITY ORB TO INSPECT ITS DIMENSIONAL HARMONICS
-        </p>
+          <p className="pointer-events-none font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.26em] text-[#9F95B3]/75 uppercase text-center">
+            SELECT A REALITY ORB TO INSPECT ITS TIMELINE — OR FORGE A PERSONAL LIFE DIVERGENCE
+          </p>
+          <button
+            type="button"
+            tabIndex={isObservatoryLayerInteractive && !selectedReality ? 0 : -1}
+            onClick={handleOpenForge}
+            className="group inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-[#0C071E]/85 hover:bg-[#190F3C]/95 border border-[#38BDF8]/50 hover:border-[#F6F3FE]/85 font-[family-name:var(--font-jetbrains-mono)] text-[10px] sm:text-[11px] tracking-[0.22em] text-[#F6F3FE] uppercase shadow-[0_0_26px_rgba(56,189,248,0.28)] hover:shadow-[0_0_36px_rgba(194,176,255,0.45)] transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#38BDF8]"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] group-hover:bg-[#F6F3FE] animate-pulse shadow-[0_0_10px_#38BDF8]" />
+            <span>[ + SIMULATE LIFE CHOICE {"//"} FORGE TIMELINE ]</span>
+          </button>
+        </div>
       </div>
 
       {/* Ethereal Right-Sanctuary Reality Deep-Dive Overlay */}
@@ -314,17 +475,20 @@ export default function CosmicObservatory({
         onSelectReality={handleDirectSelectReality}
         onCommune={handleOpenEnigma}
         onEnterBreach={handleOpenBreach}
+        onForgeBranchFromHere={handleOpenForge}
         isObservatoryActive={isObservatoryLayerInteractive}
       />
 
       {/* Subtle Bottom Cosmic Telemetry Horizon */}
       <footer
         className={`pointer-events-none w-full flex items-center justify-between px-4 sm:px-8 pb-4 sm:pb-5 font-[family-name:var(--font-jetbrains-mono)] text-[8px] sm:text-[9px] tracking-[0.26em] text-[#9F95B3]/55 uppercase transition-opacity duration-500 ${
-          isEnigmaOpen || isBreachOpen ? "opacity-0" : "opacity-100"
+          isEnigmaOpen || isBreachOpen || isForgeOpen
+            ? "opacity-0"
+            : "opacity-100"
         }`}
       >
-        <span>SYNAPTIC MATRIX // {allNodes.length} REALITIES ONLINE</span>
-        <span className="hidden sm:inline">COSMIC OBSERVATORY // NEXUS</span>
+        <span>SYNAPTIC MATRIX {"//"} {allNodes.length} REALITIES ONLINE</span>
+        <span className="hidden sm:inline">COSMIC OBSERVATORY {"//"} NEXUS</span>
         <span>
           {selectedReality
             ? `FOCUS // ${selectedReality.code}`
@@ -335,18 +499,33 @@ export default function CosmicObservatory({
       {/* Interactive Dimensional Breach Simulation Viewport */}
       {selectedReality && (
         <RealityBreachView
-          key={`${selectedReality.id}-${breachSession}`}
+          key={`breach-${breachSession}`}
           reality={selectedReality}
           isOpen={isActive && isBreachOpen}
           isEnigmaOpen={isEnigmaOpen}
           onExitBreach={handleCloseBreach}
           onSummonEnigma={handleToggleEnigma}
+          onSpectrumChange={onSpectrumChange}
+          onBranchDecision={handleBreachDecision}
         />
       )}
 
+      {/* Personal Life-Choice Multiverse Divergence Forger */}
+      <ForgeTimelineModal
+        key={`forge-${forgeSession}`}
+        isOpen={isActive && isForgeOpen}
+        initialBaseline={userBaseline}
+        parentReality={selectedReality}
+        customCount={customNodes.length}
+        maxCustomCount={MAX_CUSTOM_REALITIES}
+        onClose={handleCloseForge}
+        onBaselineChange={handleBaselineChange}
+        onTimelineForged={handleTimelineForged}
+      />
+
       {/* Dimensional Communion Interface ("The Enigma") */}
       <EnigmaCommunion
-        key={selectedReality?.id ?? "global"}
+        key={`enigma-${selectedReality?.id ?? "global"}`}
         reality={selectedReality}
         isOpen={isActive && isEnigmaOpen}
         onClose={handleCloseEnigma}

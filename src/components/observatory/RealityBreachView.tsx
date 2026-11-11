@@ -7,63 +7,35 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { synthesizeDeterministicLifeBranch } from "@/lib/multiverse/branchEngine";
 import { RealityNode } from "./realityData";
+import type {
+  DecisionChoice,
+  DecisionCrossroad,
+  EpochEraKey,
+  LifeEpoch,
+  MultiverseMetrics,
+  PersonalTimelineBranch,
+  PhysicsMode,
+  RealityLaws,
+  RealitySimulationConfig,
+  SimulationEpoch,
+  SpatialAnomaly,
+} from "@/lib/multiverse/types";
 
-/* ============================================================================
- * AI-Ready Serializable Simulation Contract
- * Designed for direct population by future generative backend APIs.
- * ========================================================================== */
-
-export type PhysicsMode =
-  | "bifurcation_horizon"
-  | "astral_astrolabe"
-  | "inverted_entropy"
-  | "dyson_harmonic"
-  | "obsidian_glass_sea"
-  | "procedural_hybrid";
-
-export type EpochEraKey = "ORIGIN" | "DIVERGENCE" | "ZENITH" | "TERMINUS";
-
-export interface RealityLaws {
-  entropy: number; // 0.0 -> 1.0
-  gravity: number; // 0.0 -> 1.0
-  coherence: number; // 0.0 -> 1.0
-}
-
-export interface SimulationEpoch {
-  id: EpochEraKey;
-  yearOffset: number; // -10000 to +10000
-  yearLabel: string;
-  eraTitle: string;
-  narrative: string;
-  densityMultiplier: number;
-  speedMultiplier: number;
-  geometryFactor: number;
-}
-
-export interface SpatialAnomaly {
-  id: string;
-  code: string;
-  label: string;
-  coordLabel: string;
-  xPct: number;
-  yPct: number;
-  signature: string;
-  discovery: string;
-}
-
-export interface RealitySimulationConfig {
-  realityId: string;
-  code: string;
-  title: string;
-  spectralTint: [number, number, number];
-  coreColor: string;
-  secondaryColor: string;
-  physicsMode: PhysicsMode;
-  epochs: SimulationEpoch[];
-  anomalies: SpatialAnomaly[];
-  laws: RealityLaws;
-}
+export type {
+  DecisionChoice,
+  DecisionCrossroad,
+  EpochEraKey,
+  LifeEpoch,
+  MultiverseMetrics,
+  PersonalTimelineBranch,
+  PhysicsMode,
+  RealityLaws,
+  RealitySimulationConfig,
+  SimulationEpoch,
+  SpatialAnomaly,
+};
 
 /* ============================================================================
  * Curated Multiverse Presets + Deterministic Custom Procedural Builder
@@ -712,6 +684,49 @@ function interpolateEpochState(
   };
 }
 
+function interpolateLifeEpochState(
+  epochs: LifeEpoch[],
+  sliderVal: number // 0..300 across 4 life stages
+): {
+  activeEpoch: LifeEpoch;
+  activeIndex: number;
+  density: number;
+  speed: number;
+  geometry: number;
+  displayAge: string;
+} {
+  const clamped = Math.max(0, Math.min(300, sliderVal));
+  const segmentFloat = (clamped / 300) * Math.max(1, epochs.length - 1);
+  const loIdx = Math.min(epochs.length - 1, Math.floor(segmentFloat));
+  const hiIdx = Math.min(epochs.length - 1, loIdx + 1);
+  const t = segmentFloat - loIdx;
+
+  const activeIndex = Math.min(
+    epochs.length - 1,
+    Math.round(segmentFloat)
+  );
+  const activeEpoch = epochs[activeIndex];
+  const a = epochs[loIdx];
+  const b = epochs[hiIdx];
+
+  const interpYear = a.yearOffset + (b.yearOffset - a.yearOffset) * t;
+  const displayAge =
+    interpYear < 0.08
+      ? "DAY 01"
+      : `+${interpYear.toFixed(interpYear < 1 ? 1 : 1)} YR${
+          interpYear >= 1.5 ? "S" : ""
+        }`;
+
+  return {
+    activeEpoch,
+    activeIndex,
+    density: a.densityMultiplier + (b.densityMultiplier - a.densityMultiplier) * t,
+    speed: a.speedMultiplier + (b.speedMultiplier - a.speedMultiplier) * t,
+    geometry: a.geometryFactor + (b.geometryFactor - a.geometryFactor) * t,
+    displayAge,
+  };
+}
+
 interface Particle {
   x: number;
   y: number;
@@ -1329,6 +1344,12 @@ interface RealityBreachViewProps {
   isEnigmaOpen: boolean;
   onExitBreach: () => void;
   onSummonEnigma: () => void;
+  onSpectrumChange?: (spectrum: [number, number, number]) => void;
+  onBranchDecision?: (
+    mutatedBranch: PersonalTimelineBranch,
+    chosenChoice: DecisionChoice,
+    sourceCrossroad: DecisionCrossroad
+  ) => void;
 }
 
 export default function RealityBreachView({
@@ -1338,86 +1359,150 @@ export default function RealityBreachView({
   isEnigmaOpen,
   onExitBreach,
   onSummonEnigma,
+  onSpectrumChange,
+  onBranchDecision,
 }: RealityBreachViewProps) {
-  const config = useMemo(
+  const baseConfig = useMemo(
     () => simulationConfig ?? buildRealitySimulationConfig(reality),
     [simulationConfig, reality]
   );
 
-  // Initial state starts on the Divergence epoch (index 1) and baseline laws
-  const [epochYear, setEpochYear] = useState<number>(
-    () => config.epochs[1]?.yearOffset ?? -2000
+  // Personal Life Timeline state (active when exploring user's own alternate life branches)
+  const [activeTimeline, setActiveTimeline] =
+    useState<PersonalTimelineBranch | null>(
+      () => reality.personalTimeline ?? null
+    );
+  const [lifeSlider, setLifeSlider] = useState<number>(100); // 0..300 across Day01/+1/+5/+10
+  const [selectedDecisionId, setSelectedDecisionId] = useState<string | null>(
+    null
   );
-  const [laws, setLaws] = useState<RealityLaws>(() => config.laws);
+  const [isMutatingDecision, setIsMutatingDecision] = useState<boolean>(false);
+  const [decisionFeedback, setDecisionFeedback] = useState<string | null>(null);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+
+  // Classic simulation state (used when exploring cosmic reality manifolds without personal timeline)
+  const [epochYear, setEpochYear] = useState<number>(
+    () => baseConfig.epochs[1]?.yearOffset ?? -2000
+  );
+  const [laws, setLaws] = useState<RealityLaws>(
+    () => reality.personalTimeline?.laws ?? baseConfig.laws
+  );
   const [selectedAnomalyId, setSelectedAnomalyId] = useState<string | null>(
     null
   );
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const runtimeRef = useRef<SimRuntime | null>(null);
+  const branchAbortRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+  const abortedByUnmountRef = useRef<boolean>(false);
 
-  const coreRgb = useMemo(() => hexToRgb(config.coreColor), [config.coreColor]);
+  useEffect(() => {
+    isMountedRef.current = true;
+    abortedByUnmountRef.current = false;
+    return () => {
+      isMountedRef.current = false;
+      abortedByUnmountRef.current = true;
+      branchAbortRef.current?.abort();
+    };
+  }, []);
+
+  const isPersonalMode = activeTimeline !== null;
+
+  const displayCoreColor = activeTimeline?.coreColor ?? baseConfig.coreColor;
+  const displaySecondaryColor =
+    activeTimeline?.secondaryColor ?? baseConfig.secondaryColor;
+  const displayPhysicsMode =
+    activeTimeline?.physicsMode ?? baseConfig.physicsMode;
+  const displayTitle = activeTimeline?.title ?? baseConfig.title;
+  const displayCode =
+    activeTimeline?.code.split("//")[0]?.trim() ?? baseConfig.code;
+  const baselineLaws = activeTimeline?.laws ?? baseConfig.laws;
+
+  const coreRgb = useMemo(() => hexToRgb(displayCoreColor), [displayCoreColor]);
   const secondaryRgb = useMemo(
-    () => hexToRgb(config.secondaryColor),
-    [config.secondaryColor]
+    () => hexToRgb(displaySecondaryColor),
+    [displaySecondaryColor]
   );
 
   const epochSnapshot = useMemo(
-    () => interpolateEpochState(config.epochs, epochYear),
-    [config.epochs, epochYear]
+    () => interpolateEpochState(baseConfig.epochs, epochYear),
+    [baseConfig.epochs, epochYear]
   );
 
+  const lifeSnapshot = useMemo(
+    () =>
+      activeTimeline
+        ? interpolateLifeEpochState(activeTimeline.epochs, lifeSlider)
+        : null,
+    [activeTimeline, lifeSlider]
+  );
+
+  const activeDensity = lifeSnapshot?.density ?? epochSnapshot.density;
+  const activeSpeed = lifeSnapshot?.speed ?? epochSnapshot.speed;
+  const activeGeometry = lifeSnapshot?.geometry ?? epochSnapshot.geometry;
+
   const selectedAnomaly = useMemo(
-    () => config.anomalies.find((a) => a.id === selectedAnomalyId) ?? null,
-    [config.anomalies, selectedAnomalyId]
+    () => baseConfig.anomalies.find((a) => a.id === selectedAnomalyId) ?? null,
+    [baseConfig.anomalies, selectedAnomalyId]
+  );
+
+  const selectedCrossroad = useMemo(
+    () =>
+      activeTimeline?.decisionNodes.find((d) => d.id === selectedDecisionId) ??
+      null,
+    [activeTimeline, selectedDecisionId]
   );
 
   const isLawsModified = useMemo(
     () =>
-      Math.abs(laws.entropy - config.laws.entropy) > 0.01 ||
-      Math.abs(laws.gravity - config.laws.gravity) > 0.01 ||
-      Math.abs(laws.coherence - config.laws.coherence) > 0.01,
-    [laws, config.laws]
+      Math.abs(laws.entropy - baselineLaws.entropy) > 0.01 ||
+      Math.abs(laws.gravity - baselineLaws.gravity) > 0.01 ||
+      Math.abs(laws.coherence - baselineLaws.coherence) > 0.01,
+    [laws, baselineLaws]
   );
 
   const renderParamsRef = useRef<RenderParams>({
-    physicsMode: config.physicsMode,
+    physicsMode: displayPhysicsMode,
     coreRgb,
     secondaryRgb,
-    laws: config.laws,
-    density: epochSnapshot.density,
-    speed: epochSnapshot.speed,
-    geometry: epochSnapshot.geometry,
+    laws,
+    density: activeDensity,
+    speed: activeSpeed,
+    geometry: activeGeometry,
     lockedFocus: null,
     reducedMotion: false,
   });
 
-  // Sync live React controls into render ref without rebuilding the canvas loop
+  // Sync live React controls & mutated timeline traits into canvas rAF loop cleanly
   useEffect(() => {
     const reduced =
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const focusNode = isPersonalMode ? selectedCrossroad : selectedAnomaly;
     renderParamsRef.current = {
-      physicsMode: config.physicsMode,
+      physicsMode: displayPhysicsMode,
       coreRgb,
       secondaryRgb,
       laws,
-      density: epochSnapshot.density,
-      speed: epochSnapshot.speed,
-      geometry: epochSnapshot.geometry,
-      lockedFocus: selectedAnomaly
-        ? { x: selectedAnomaly.xPct / 100, y: selectedAnomaly.yPct / 100 }
+      density: activeDensity,
+      speed: activeSpeed,
+      geometry: activeGeometry,
+      lockedFocus: focusNode
+        ? { x: focusNode.xPct / 100, y: focusNode.yPct / 100 }
         : null,
       reducedMotion: reduced,
     };
   }, [
-    config.physicsMode,
+    displayPhysicsMode,
     coreRgb,
     secondaryRgb,
     laws,
-    epochSnapshot.density,
-    epochSnapshot.speed,
-    epochSnapshot.geometry,
+    activeDensity,
+    activeSpeed,
+    activeGeometry,
+    isPersonalMode,
+    selectedCrossroad,
     selectedAnomaly,
   ]);
 
@@ -1443,7 +1528,7 @@ export default function RealityBreachView({
     if (!ctx) return;
 
     const runtime: SimRuntime = {
-      particles: createParticlePool(config.realityId),
+      particles: createParticlePool(baseConfig.realityId),
       ripples: [],
       pointerX: 0.5,
       pointerY: 0.5,
@@ -1547,7 +1632,7 @@ export default function RealityBreachView({
       window.removeEventListener("resize", handleResize);
       runtimeRef.current = null;
     };
-  }, [isOpen, config.realityId]);
+  }, [isOpen, baseConfig.realityId]);
 
   const handleCanvasPointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -1610,25 +1695,199 @@ export default function RealityBreachView({
     rt.pointerActive = false;
   }, []);
 
-  const handleSelectAnomaly = useCallback(
-    (anomaly: SpatialAnomaly) => {
-      setSelectedAnomalyId((prev) =>
-        prev === anomaly.id ? null : anomaly.id
+  const handleSelectAnomaly = useCallback((anomaly: SpatialAnomaly) => {
+    setSelectedAnomalyId((prev) => (prev === anomaly.id ? null : anomaly.id));
+    const rt = runtimeRef.current;
+    if (rt) {
+      rt.pointerActive = false;
+      rt.ripples.push({
+        x: anomaly.xPct / 100,
+        y: anomaly.yPct / 100,
+        radius: 8,
+        maxRadius: 170,
+        alpha: 0.95,
+        isSecondary: false,
+      });
+    }
+  }, []);
+
+  const handleSelectCrossroad = useCallback(
+    (crossroad: DecisionCrossroad) => {
+      setDecisionError(null);
+      setSelectedDecisionId((prev) =>
+        prev === crossroad.id ? null : crossroad.id
       );
       const rt = runtimeRef.current;
       if (rt) {
         rt.pointerActive = false;
         rt.ripples.push({
-          x: anomaly.xPct / 100,
-          y: anomaly.yPct / 100,
-          radius: 8,
-          maxRadius: 170,
+          x: crossroad.xPct / 100,
+          y: crossroad.yPct / 100,
+          radius: 10,
+          maxRadius: 190,
           alpha: 0.95,
           isSecondary: false,
         });
       }
     },
     []
+  );
+
+  const handleChooseDecision = useCallback(
+    async (crossroad: DecisionCrossroad, choice: DecisionChoice) => {
+      if (!activeTimeline || isMutatingDecision) return;
+
+      setDecisionError(null);
+      setIsMutatingDecision(true);
+
+      abortedByUnmountRef.current = true;
+      branchAbortRef.current?.abort();
+
+      abortedByUnmountRef.current = false;
+      const controller = new AbortController();
+      branchAbortRef.current = controller;
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      const payload = {
+        currentSelfContext: activeTimeline.currentSelfContext,
+        pivotalChoice: activeTimeline.pivotalChoice,
+        parentTimelineTitle: activeTimeline.title,
+        currentEpoch: lifeSnapshot?.activeEpoch.stageLabel ?? crossroad.coordLabel,
+        chosenOption: choice.label,
+      };
+
+      const commitMutatedBranch = (baseBranch: PersonalTimelineBranch) => {
+        if (!isMountedRef.current) return;
+
+        const mutatedMetrics: MultiverseMetrics = {
+          fulfillment: Math.max(
+            15,
+            Math.min(
+              100,
+              Math.round(
+                activeTimeline.metrics.fulfillment +
+                  choice.impactMetrics.fulfillmentDelta
+              )
+            )
+          ),
+          riskEntropy: Number(
+            Math.max(
+              0.08,
+              Math.min(
+                0.96,
+                activeTimeline.metrics.riskEntropy +
+                  choice.impactMetrics.riskEntropyDelta
+              )
+            ).toFixed(2)
+          ),
+          divergence: Math.max(
+            10,
+            Math.min(
+              100,
+              Math.round(
+                activeTimeline.metrics.divergence +
+                  choice.impactMetrics.divergenceDelta
+              )
+            )
+          ),
+          temporalCoherence: Math.max(
+            20,
+            Math.min(
+              99,
+              Math.round(
+                activeTimeline.metrics.temporalCoherence +
+                  choice.impactMetrics.coherenceDelta
+              )
+            )
+          ),
+        };
+
+        const mutatedBranch: PersonalTimelineBranch = {
+          ...baseBranch,
+          metrics: mutatedMetrics,
+          laws: {
+            entropy: mutatedMetrics.riskEntropy,
+            gravity: baseBranch.laws.gravity,
+            coherence: Number(
+              Math.max(
+                0.24,
+                Math.min(0.96, mutatedMetrics.temporalCoherence / 100)
+              ).toFixed(2)
+            ),
+          },
+        };
+
+        setActiveTimeline(mutatedBranch);
+        setLaws(mutatedBranch.laws);
+        setSelectedDecisionId(null);
+        setDecisionFeedback(`FORK COMMITTED // "${choice.label}"`);
+        onSpectrumChange?.(mutatedBranch.spectralTint);
+        onBranchDecision?.(mutatedBranch, choice, crossroad);
+
+        const rt = runtimeRef.current;
+        if (rt) {
+          rt.ripples.push(
+            {
+              x: crossroad.xPct / 100,
+              y: crossroad.yPct / 100,
+              radius: 10,
+              maxRadius: 340,
+              alpha: 1,
+              isSecondary: false,
+            },
+            {
+              x: 0.5,
+              y: 0.5,
+              radius: 18,
+              maxRadius: 420,
+              alpha: 0.85,
+              isSecondary: true,
+            }
+          );
+        }
+      };
+
+      try {
+        const res = await fetch("/api/multiverse/branch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify(payload),
+        });
+
+        const data = (await res.json()) as
+          | PersonalTimelineBranch
+          | { error?: string };
+
+        if (!res.ok || !("epochs" in data)) {
+          throw new Error(
+            ("error" in data && data.error) || "Branch bifurcation failed."
+          );
+        }
+
+        commitMutatedBranch(data);
+      } catch {
+        if (abortedByUnmountRef.current || !isMountedRef.current) {
+          return;
+        }
+        commitMutatedBranch(synthesizeDeterministicLifeBranch(payload));
+      } finally {
+        clearTimeout(timeoutId);
+        if (branchAbortRef.current === controller) {
+          branchAbortRef.current = null;
+        }
+        if (isMountedRef.current) {
+          setIsMutatingDecision(false);
+        }
+      }
+    },
+    [
+      activeTimeline,
+      isMutatingDecision,
+      lifeSnapshot,
+      onSpectrumChange,
+      onBranchDecision,
+    ]
   );
 
   const handleLawChange = useCallback(
@@ -1640,14 +1899,14 @@ export default function RealityBreachView({
   );
 
   const handleResetLaws = useCallback(() => {
-    setLaws(config.laws);
-  }, [config.laws]);
+    setLaws(baselineLaws);
+  }, [baselineLaws]);
 
-  const physicsLabel = config.physicsMode.replace(/_/g, " ").toUpperCase();
+  const physicsLabel = displayPhysicsMode.replace(/_/g, " ").toUpperCase();
 
   return (
     <section
-      aria-label={`Dimensional Breach Simulation: ${config.title}`}
+      aria-label={`Dimensional Breach Simulation: ${displayTitle}`}
       aria-hidden={!isOpen}
       inert={!isOpen || isEnigmaOpen ? true : undefined}
       className={`fixed inset-0 z-[25] flex flex-col justify-between transition-all duration-700 ${
@@ -1678,83 +1937,229 @@ export default function RealityBreachView({
         }}
       />
 
-      {/* Spatial Anomaly Beacons (3 Inspectable Anchors Inside the World) */}
+      {/* Interactive Floating Beacons: Decision Crossroads (Personal Life) or Spatial Anomalies */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {config.anomalies.map((anomaly) => {
-          const isSelected = selectedAnomalyId === anomaly.id;
-          return (
+        {isPersonalMode && activeTimeline
+          ? activeTimeline.decisionNodes.map((crossroad) => {
+              const isSelected = selectedDecisionId === crossroad.id;
+              return (
+                <div
+                  key={crossroad.id}
+                  style={{
+                    left: `${crossroad.xPct}%`,
+                    top: `${crossroad.yPct}%`,
+                  }}
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
+                >
+                  <button
+                    type="button"
+                    tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
+                    onClick={() => handleSelectCrossroad(crossroad)}
+                    aria-expanded={isSelected}
+                    aria-label={`Inspect ${crossroad.code}: ${crossroad.label}`}
+                    className="pointer-events-auto group relative flex items-center gap-2 px-2.5 py-1.5 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-[#F6F3FE]/70 cursor-pointer"
+                  >
+                    <span className="relative flex items-center justify-center w-6 h-6">
+                      <span
+                        className={`absolute inset-0 rounded-full border transition-transform duration-500 ${
+                          isSelected ? "scale-125" : "group-hover:scale-115"
+                        }`}
+                        style={{
+                          borderColor: isSelected
+                            ? displayCoreColor
+                            : `${displayCoreColor}99`,
+                          boxShadow: isSelected
+                            ? `0 0 16px ${displayCoreColor}`
+                            : `0 0 8px ${displayCoreColor}55`,
+                        }}
+                      />
+                      <span
+                        className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                          isSelected ? "scale-125" : "animate-pulse"
+                        }`}
+                        style={{
+                          backgroundColor: isSelected
+                            ? "#F6F3FE"
+                            : displayCoreColor,
+                          boxShadow: `0 0 12px ${displayCoreColor}`,
+                        }}
+                      />
+                    </span>
+
+                    <span className="hidden sm:flex flex-col items-start text-left leading-tight backdrop-blur-md bg-[#090514]/65 border border-white/15 group-hover:border-white/40 rounded-full px-3 py-1 transition-all">
+                      <span
+                        className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.22em] uppercase"
+                        style={{ color: displayCoreColor }}
+                      >
+                        {crossroad.code} {"//"} {crossroad.label}
+                      </span>
+                    </span>
+                  </button>
+                </div>
+              );
+            })
+          : baseConfig.anomalies.map((anomaly) => {
+              const isSelected = selectedAnomalyId === anomaly.id;
+              return (
+                <div
+                  key={anomaly.id}
+                  style={{
+                    left: `${anomaly.xPct}%`,
+                    top: `${anomaly.yPct}%`,
+                  }}
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
+                >
+                  <button
+                    type="button"
+                    tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
+                    onClick={() => handleSelectAnomaly(anomaly)}
+                    aria-expanded={isSelected}
+                    aria-label={`Inspect ${anomaly.code}: ${anomaly.label}`}
+                    className="pointer-events-auto group relative flex items-center gap-2 px-2.5 py-1.5 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-[#F6F3FE]/70 cursor-pointer"
+                  >
+                    <span className="relative flex items-center justify-center w-5 h-5">
+                      <span
+                        className={`absolute inset-0 rounded-full border transition-transform duration-500 ${
+                          isSelected ? "scale-125" : "group-hover:scale-115"
+                        }`}
+                        style={{
+                          borderColor: isSelected
+                            ? displayCoreColor
+                            : `${displayCoreColor}88`,
+                          boxShadow: isSelected
+                            ? `0 0 14px ${displayCoreColor}`
+                            : "none",
+                        }}
+                      />
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                          isSelected ? "scale-125" : "animate-pulse"
+                        }`}
+                        style={{
+                          backgroundColor: isSelected
+                            ? "#F6F3FE"
+                            : displayCoreColor,
+                          boxShadow: `0 0 10px ${displayCoreColor}`,
+                        }}
+                      />
+                    </span>
+
+                    <span className="hidden sm:flex flex-col items-start text-left leading-tight backdrop-blur-md bg-[#090514]/55 border border-white/10 group-hover:border-white/30 rounded-full px-2.5 py-1 transition-all">
+                      <span
+                        className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.22em] uppercase"
+                        style={{ color: displayCoreColor }}
+                      >
+                        {anomaly.code} {"//"} {anomaly.coordLabel}
+                      </span>
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
+
+        {/* Floating Holographic Choice Dilemma Card (Personal Life Decision Crossroads) */}
+        {isPersonalMode && selectedCrossroad && (
+          <div className="pointer-events-auto fixed left-4 sm:left-8 top-20 sm:top-24 z-20 w-[min(92vw,26rem)] max-h-[56vh] overflow-y-auto rounded-2xl bg-[#070412]/84 backdrop-blur-xl border border-white/18 px-4 sm:px-5 py-4 shadow-[0_0_40px_rgba(8,4,22,0.85)]">
             <div
-              key={anomaly.id}
+              aria-hidden="true"
+              className="absolute inset-x-8 top-0 h-px"
               style={{
-                left: `${anomaly.xPct}%`,
-                top: `${anomaly.yPct}%`,
+                background: `linear-gradient(90deg, transparent, ${displayCoreColor}, transparent)`,
               }}
-              className="absolute -translate-x-1/2 -translate-y-1/2"
-            >
+            />
+
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <span
+                className="font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.24em] uppercase"
+                style={{ color: displayCoreColor }}
+              >
+                {selectedCrossroad.code} {"//"} {selectedCrossroad.coordLabel}
+              </span>
               <button
                 type="button"
                 tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
-                onClick={() => handleSelectAnomaly(anomaly)}
-                aria-expanded={isSelected}
-                aria-label={`Inspect ${anomaly.code}: ${anomaly.label}`}
-                className="pointer-events-auto group relative flex items-center gap-2 px-2.5 py-1.5 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-[#F6F3FE]/70 cursor-pointer"
+                disabled={isMutatingDecision}
+                onClick={() => setSelectedDecisionId(null)}
+                className="font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.2em] text-[#9F95B3] hover:text-[#F6F3FE] uppercase cursor-pointer disabled:opacity-40"
               >
-                {/* Pulsing Reticle Target */}
-                <span className="relative flex items-center justify-center w-5 h-5">
-                  <span
-                    className={`absolute inset-0 rounded-full border transition-transform duration-500 ${
-                      isSelected ? "scale-125" : "group-hover:scale-115"
-                    }`}
-                    style={{
-                      borderColor: isSelected
-                        ? config.coreColor
-                        : `${config.coreColor}88`,
-                      boxShadow: isSelected
-                        ? `0 0 14px ${config.coreColor}`
-                        : "none",
-                    }}
-                  />
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                      isSelected ? "scale-125" : "animate-pulse"
-                    }`}
-                    style={{
-                      backgroundColor: isSelected
-                        ? "#F6F3FE"
-                        : config.coreColor,
-                      boxShadow: `0 0 10px ${config.coreColor}`,
-                    }}
-                  />
-                </span>
-
-                {/* Coordinate Callout Label */}
-                <span className="hidden sm:flex flex-col items-start text-left leading-tight backdrop-blur-md bg-[#090514]/55 border border-white/10 group-hover:border-white/30 rounded-full px-2.5 py-1 transition-all">
-                  <span
-                    className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.22em] uppercase"
-                    style={{ color: config.coreColor }}
-                  >
-                    {anomaly.code} {"//"} {anomaly.coordLabel}
-                  </span>
-                </span>
+                [ CLOSE ]
               </button>
             </div>
-          );
-        })}
 
-        {/* Floating Holographic Anomaly Readout */}
-        {selectedAnomaly && (
+            <h3 className="font-[family-name:var(--font-orbitron)] text-xs sm:text-sm tracking-[0.14em] text-[#F6F3FE] uppercase">
+              {selectedCrossroad.label}
+            </h3>
+
+            <p className="mt-2 font-[family-name:var(--font-inter)] text-xs leading-relaxed text-[#E3DCF5]/90">
+              {selectedCrossroad.dilemma}
+            </p>
+
+            {decisionError && (
+              <p className="mt-2 font-[family-name:var(--font-jetbrains-mono)] text-[9px] text-[#FB7185] uppercase">
+                {decisionError}
+              </p>
+            )}
+
+            <div className="mt-3.5 space-y-2">
+              {selectedCrossroad.choices.map((choice) => {
+                const { impactMetrics } = choice;
+                const fulfillSign = impactMetrics.fulfillmentDelta >= 0 ? "+" : "";
+                const entropySign = impactMetrics.riskEntropyDelta >= 0 ? "+" : "";
+                return (
+                  <button
+                    key={choice.id}
+                    type="button"
+                    tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
+                    disabled={isMutatingDecision}
+                    onClick={() =>
+                      handleChooseDecision(selectedCrossroad, choice)
+                    }
+                    className="w-full text-left rounded-xl bg-[#0F0922]/75 hover:bg-[#1B1040]/90 border border-white/12 hover:border-[#F6F3FE]/45 px-3 py-2.5 transition-all cursor-pointer disabled:opacity-45 disabled:cursor-wait focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF]"
+                  >
+                    <span
+                      className="block font-[family-name:var(--font-space-grotesk)] text-xs font-medium text-[#F6F3FE]"
+                    >
+                      {isMutatingDecision
+                        ? "WEAVING TIMELINE BRANCH..."
+                        : `-> ${choice.label}`}
+                    </span>
+                    <span className="mt-1 block font-[family-name:var(--font-inter)] text-[11px] leading-snug text-[#B7ADD0]/90">
+                      {choice.consequencePreview}
+                    </span>
+                    <span className="mt-1.5 flex flex-wrap gap-2 font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.16em] uppercase">
+                      <span style={{ color: displayCoreColor }}>
+                        {fulfillSign}
+                        {impactMetrics.fulfillmentDelta}% FULFILL
+                      </span>
+                      <span className="text-[#C2B0FF]/80">
+                        {entropySign}
+                        {impactMetrics.riskEntropyDelta.toFixed(2)} ENTROPY
+                      </span>
+                      <span className="text-[#9F95B3]">
+                        +{impactMetrics.divergenceDelta}% DIV
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Classic Floating Holographic Anomaly Readout */}
+        {!isPersonalMode && selectedAnomaly && (
           <div className="pointer-events-auto fixed left-4 sm:left-8 top-24 sm:top-28 z-20 max-w-xs sm:max-w-sm rounded-2xl bg-[#070412]/72 backdrop-blur-xl border border-white/15 px-4 py-3.5 shadow-[0_0_32px_rgba(8,4,22,0.75)]">
             <div
               aria-hidden="true"
               className="absolute inset-x-6 top-0 h-px"
               style={{
-                background: `linear-gradient(90deg, transparent, ${config.coreColor}, transparent)`,
+                background: `linear-gradient(90deg, transparent, ${displayCoreColor}, transparent)`,
               }}
             />
             <div className="flex items-center justify-between gap-3 mb-1.5">
               <span
                 className="font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.26em] uppercase"
-                style={{ color: config.coreColor }}
+                style={{ color: displayCoreColor }}
               >
                 {selectedAnomaly.code} {"//"} {selectedAnomaly.signature}
               </span>
@@ -1771,7 +2176,7 @@ export default function RealityBreachView({
               {selectedAnomaly.label}
             </h3>
             <p className="mt-1 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.2em] text-[#B7ADD0]/80 uppercase">
-              LOC // {selectedAnomaly.coordLabel}
+              LOC {"//"} {selectedAnomaly.coordLabel}
             </p>
             <p className="mt-2 font-[family-name:var(--font-inter)] text-xs leading-relaxed text-[#E3DCF5]/90">
               {selectedAnomaly.discovery}
@@ -1797,17 +2202,23 @@ export default function RealityBreachView({
             <span
               className="w-2 h-2 rounded-full animate-pulse"
               style={{
-                backgroundColor: config.coreColor,
-                boxShadow: `0 0 10px ${config.coreColor}`,
+                backgroundColor: displayCoreColor,
+                boxShadow: `0 0 10px ${displayCoreColor}`,
               }}
             />
             <span className="font-[family-name:var(--font-orbitron)] text-[10px] sm:text-xs tracking-[0.2em] text-[#F6F3FE] uppercase">
-              {config.code} {"//"} {config.title}
+              {displayCode} {"//"} {displayTitle}
             </span>
             <span className="hidden lg:inline font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.22em] text-[#9F95B3] uppercase">
               PHYSICS: {physicsLabel}
             </span>
           </div>
+
+          {decisionFeedback && (
+            <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#0C0720]/75 border border-[#38BDF8]/40 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.2em] text-[#38BDF8] uppercase">
+              <span>{decisionFeedback}</span>
+            </div>
+          )}
         </div>
 
         <div className="pointer-events-auto flex items-center gap-2.5">
@@ -1820,162 +2231,331 @@ export default function RealityBreachView({
             <span
               className="w-1.5 h-1.5 rounded-full"
               style={{
-                backgroundColor: config.secondaryColor,
-                boxShadow: `0 0 8px ${config.secondaryColor}`,
+                backgroundColor: displaySecondaryColor,
+                boxShadow: `0 0 8px ${displaySecondaryColor}`,
               }}
             />
-            <span>[ SUMMON ENIGMA IN BREACH ]</span>
+            <span>
+              {isPersonalMode
+                ? "[ COMMUNE WITH PARALLEL SELF / ORACLE ]"
+                : "[ SUMMON ENIGMA IN BREACH ]"}
+            </span>
           </button>
         </div>
       </header>
 
-      {/* Middle Zone: Reality Law Mutators HUD on Right Sanctuary */}
+      {/* Middle Zone: Life Alignment Metrics + Reality Law Mutators HUD on Right Sanctuary */}
       <div className="relative z-10 pointer-events-none flex-1 flex items-center justify-end px-4 sm:px-8">
         <aside
           aria-label="Live Reality Law Mutators"
-          className="pointer-events-auto w-56 sm:w-64 rounded-2xl bg-[#080414]/60 backdrop-blur-xl border border-white/12 px-4 py-3.5 shadow-[0_0_28px_rgba(7,3,18,0.65)]"
+          className="pointer-events-auto w-56 sm:w-64 rounded-2xl bg-[#080414]/65 backdrop-blur-xl border border-white/12 px-4 py-3.5 shadow-[0_0_28px_rgba(7,3,18,0.65)] space-y-3.5"
         >
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <span className="font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.24em] text-[#B7ADD0] uppercase">
-              REALITY LAW MUTATORS
-            </span>
-            {isLawsModified && (
-              <button
-                type="button"
-                tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
-                onClick={handleResetLaws}
-                className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.2em] text-[#C2B0FF] hover:text-[#F6F3FE] uppercase cursor-pointer"
-              >
-                [ RESET ]
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            {(
-              [
-                {
-                  key: "entropy",
-                  label: "ENTROPY RATE",
-                  value: laws.entropy,
-                  accent: config.secondaryColor,
-                },
-                {
-                  key: "gravity",
-                  label: "GRAVITATIONAL FLUX",
-                  value: laws.gravity,
-                  accent: config.coreColor,
-                },
-                {
-                  key: "coherence",
-                  label: "TEMPORAL COHERENCE",
-                  value: laws.coherence,
-                  accent: "#C2B0FF",
-                },
-              ] as const
-            ).map((law) => {
-              const pct = Math.round(law.value * 100);
-              return (
-                <div key={law.key} className="space-y-1">
-                  <div className="flex items-center justify-between font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.2em] uppercase">
-                    <span className="text-[#D4CBEB]/90">{law.label}</span>
-                    <span style={{ color: law.accent }}>{pct}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={pct}
-                    tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
-                    aria-label={law.label}
-                    onChange={(e) => handleLawChange(law.key, e.target.value)}
-                    style={{ accentColor: law.accent }}
-                    className="w-full h-1 rounded-full bg-white/15 appearance-none cursor-pointer focus:outline-none"
-                  />
+          {isPersonalMode && activeTimeline && (
+            <div className="pb-3 border-b border-white/10">
+              <div className="flex items-center justify-between gap-2 mb-2 font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.22em] text-[#9F95B3] uppercase">
+                <span>TIMELINE TELEMETRY</span>
+                <span style={{ color: displayCoreColor }}>
+                  {activeTimeline.generatorSource.toUpperCase()}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 font-[family-name:var(--font-jetbrains-mono)]">
+                <div>
+                  <span className="block text-[8px] text-[#9F95B3]/75 tracking-[0.16em]">
+                    FULFILLMENT
+                  </span>
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: displayCoreColor }}
+                  >
+                    {activeTimeline.metrics.fulfillment}%
+                  </span>
                 </div>
-              );
-            })}
+                <div>
+                  <span className="block text-[8px] text-[#9F95B3]/75 tracking-[0.16em]">
+                    RISK ENTROPY
+                  </span>
+                  <span className="text-xs text-[#F6F3FE] font-medium">
+                    {activeTimeline.metrics.riskEntropy.toFixed(2)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[8px] text-[#9F95B3]/75 tracking-[0.16em]">
+                    DIVERGENCE
+                  </span>
+                  <span className="text-xs text-[#C2B0FF] font-medium">
+                    {activeTimeline.metrics.divergence}%
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[8px] text-[#9F95B3]/75 tracking-[0.16em]">
+                    COHERENCE
+                  </span>
+                  <span className="text-xs text-[#F6F3FE] font-medium">
+                    {activeTimeline.metrics.temporalCoherence}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <span className="font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.24em] text-[#B7ADD0] uppercase">
+                REALITY LAW MUTATORS
+              </span>
+              {isLawsModified && (
+                <button
+                  type="button"
+                  tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
+                  onClick={handleResetLaws}
+                  className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.2em] text-[#C2B0FF] hover:text-[#F6F3FE] uppercase cursor-pointer"
+                >
+                  [ RESET ]
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-2.5">
+              {(
+                [
+                  {
+                    key: "entropy",
+                    label: "ENTROPY RATE",
+                    value: laws.entropy,
+                    accent: displaySecondaryColor,
+                  },
+                  {
+                    key: "gravity",
+                    label: "GRAVITATIONAL FLUX",
+                    value: laws.gravity,
+                    accent: displayCoreColor,
+                  },
+                  {
+                    key: "coherence",
+                    label: "TEMPORAL COHERENCE",
+                    value: laws.coherence,
+                    accent: "#C2B0FF",
+                  },
+                ] as const
+              ).map((law) => {
+                const pct = Math.round(law.value * 100);
+                return (
+                  <div key={law.key} className="space-y-1">
+                    <div className="flex items-center justify-between font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.2em] uppercase">
+                      <span className="text-[#D4CBEB]/90">{law.label}</span>
+                      <span style={{ color: law.accent }}>{pct}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={pct}
+                      tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
+                      aria-label={law.label}
+                      onChange={(e) => handleLawChange(law.key, e.target.value)}
+                      style={{ accentColor: law.accent }}
+                      className="w-full h-1 rounded-full bg-white/15 appearance-none cursor-pointer focus:outline-none"
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </aside>
       </div>
 
-      {/* Bottom Epoch Timeline Scrubber (-10,000 YR to +10,000 YR) */}
+      {/* Bottom Epoch Timeline Scrubber: Life Stages (Personal) or Cosmic Eras */}
       <footer className="relative z-10 pointer-events-none px-4 sm:px-8 pb-5 sm:pb-7">
-        <div className="pointer-events-auto mx-auto max-w-4xl rounded-2xl bg-[#070412]/68 backdrop-blur-xl border border-white/12 px-4 sm:px-6 py-3.5 shadow-[0_0_32px_rgba(7,3,18,0.72)]">
-          {/* Active Epoch Narrative Header */}
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-2.5">
-            <div className="flex items-center gap-2.5">
-              <span
-                className="font-[family-name:var(--font-jetbrains-mono)] text-[10px] tracking-[0.26em] uppercase"
-                style={{ color: config.coreColor }}
-              >
-                {epochSnapshot.activeEpoch.id} {"//"} {formatYearLabel(epochYear)}
-              </span>
-              <span className="font-[family-name:var(--font-orbitron)] text-[11px] sm:text-xs tracking-[0.16em] text-[#F6F3FE] uppercase">
-                {epochSnapshot.activeEpoch.eraTitle}
+        {isPersonalMode && activeTimeline && lifeSnapshot ? (
+          <div className="pointer-events-auto mx-auto max-w-4xl rounded-2xl bg-[#070412]/74 backdrop-blur-xl border border-white/12 px-4 sm:px-6 py-3.5 shadow-[0_0_32px_rgba(7,3,18,0.78)]">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-2">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span
+                  className="font-[family-name:var(--font-jetbrains-mono)] text-[10px] tracking-[0.24em] uppercase"
+                  style={{ color: displayCoreColor }}
+                >
+                  {lifeSnapshot.activeEpoch.stageLabel} {"//"}{" "}
+                  {lifeSnapshot.displayAge}
+                </span>
+                <span className="font-[family-name:var(--font-orbitron)] text-[11px] sm:text-xs tracking-[0.16em] text-[#F6F3FE] uppercase">
+                  {lifeSnapshot.activeEpoch.eraTitle}
+                </span>
+              </div>
+              <span className="hidden md:inline font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.2em] text-[#9F95B3]/80 uppercase">
+                CLICK A DECISION NODE TO FORK TIMELINE
               </span>
             </div>
-            <span className="hidden sm:inline font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.22em] text-[#9F95B3]/80 uppercase">
-              CLICK OR DRAG HORIZON TO DISTURB FIELD
-            </span>
-          </div>
 
-          <p className="font-[family-name:var(--font-inter)] text-[11px] sm:text-xs leading-relaxed text-[#D8D0ED]/88 mb-3">
-            {epochSnapshot.activeEpoch.narrative}
-          </p>
+            <p className="font-[family-name:var(--font-inter)] text-[11px] sm:text-xs leading-relaxed text-[#E7E0F8]/92 mb-2.5">
+              {lifeSnapshot.activeEpoch.narrative}
+            </p>
 
-          {/* 4 Clickable Era Checkpoints */}
-          <div className="grid grid-cols-4 gap-2 mb-2">
-            {config.epochs.map((ep) => {
-              const isCurrent = epochSnapshot.activeEpoch.id === ep.id;
-              return (
-                <button
-                  key={ep.id}
-                  type="button"
-                  tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
-                  onClick={() => setEpochYear(ep.yearOffset)}
-                  className={`flex flex-col items-start sm:items-center text-left sm:text-center px-2 py-1 rounded-lg border transition-all cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF] ${
-                    isCurrent
-                      ? "bg-white/10 border-white/30 text-[#F6F3FE]"
-                      : "bg-transparent border-transparent text-[#9F95B3] hover:text-[#DFD6F7] hover:bg-white/5"
-                  }`}
-                >
-                  <span
-                    className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] sm:text-[9px] tracking-[0.22em] uppercase"
-                    style={{ color: isCurrent ? config.coreColor : undefined }}
+            {/* 4 Life State Facets */}
+            <div className="hidden sm:grid grid-cols-4 gap-2 mb-3 pt-2 border-t border-white/10 font-[family-name:var(--font-inter)]">
+              <div className="min-w-0">
+                <span className="block font-[family-name:var(--font-jetbrains-mono)] text-[7.5px] tracking-[0.2em] text-[#9F95B3]/75 uppercase">
+                  WHO YOU BECOME
+                </span>
+                <span className="block truncate text-[10.5px] text-[#F6F3FE]">
+                  {lifeSnapshot.activeEpoch.whoYouBecome}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <span className="block font-[family-name:var(--font-jetbrains-mono)] text-[7.5px] tracking-[0.2em] text-[#9F95B3]/75 uppercase">
+                  WHERE YOU LIVE
+                </span>
+                <span className="block truncate text-[10.5px] text-[#E6DFFF]">
+                  {lifeSnapshot.activeEpoch.whereYouLive}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <span className="block font-[family-name:var(--font-jetbrains-mono)] text-[7.5px] tracking-[0.2em] text-[#9F95B3]/75 uppercase">
+                  WHAT YOU BUILD
+                </span>
+                <span className="block truncate text-[10.5px] text-[#C2B0FF]">
+                  {lifeSnapshot.activeEpoch.whatYouBuild}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <span className="block font-[family-name:var(--font-jetbrains-mono)] text-[7.5px] tracking-[0.2em] text-[#FB7185]/80 uppercase">
+                  WHAT YOU SACRIFICED
+                </span>
+                <span className="block truncate text-[10.5px] text-[#D4CBEB]/85">
+                  {lifeSnapshot.activeEpoch.whatYouSacrificed}
+                </span>
+              </div>
+            </div>
+
+            {/* 4 Clickable Life Horizon Checkpoints */}
+            <div className="grid grid-cols-4 gap-2 mb-2">
+              {activeTimeline.epochs.map((ep, idx) => {
+                const isCurrent = lifeSnapshot.activeIndex === idx;
+                return (
+                  <button
+                    key={ep.id}
+                    type="button"
+                    tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
+                    onClick={() => setLifeSlider(idx * 100)}
+                    className={`flex flex-col items-start sm:items-center text-left sm:text-center px-2 py-1 rounded-lg border transition-all cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF] ${
+                      isCurrent
+                        ? "bg-white/10 border-white/30 text-[#F6F3FE]"
+                        : "bg-transparent border-transparent text-[#9F95B3] hover:text-[#DFD6F7] hover:bg-white/5"
+                    }`}
                   >
-                    {ep.id}
-                  </span>
-                  <span className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.16em] opacity-75">
-                    {ep.yearLabel}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                    <span
+                      className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] sm:text-[9px] tracking-[0.2em] uppercase"
+                      style={{
+                        color: isCurrent ? displayCoreColor : undefined,
+                      }}
+                    >
+                      {ep.id}
+                    </span>
+                    <span className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.14em] opacity-75">
+                      {ep.yearLabel}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
-          {/* Continuous Temporal Horizon Scrubber */}
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:inline font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.18em] text-[#9F95B3]/75">
-              -10,000 YR
-            </span>
-            <input
-              type="range"
-              min={-10000}
-              max={10000}
-              step={50}
-              value={epochYear}
-              tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
-              aria-label="Epoch Timeline Scrubber"
-              onChange={(e) => setEpochYear(Number(e.target.value))}
-              style={{ accentColor: config.coreColor }}
-              className="w-full h-1.5 rounded-full bg-white/15 appearance-none cursor-pointer focus:outline-none"
-            />
-            <span className="hidden sm:inline font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.18em] text-[#9F95B3]/75">
-              +10,000 YR
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:inline font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.18em] text-[#9F95B3]/75">
+                DAY 01
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={300}
+                step={2}
+                value={lifeSlider}
+                tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
+                aria-label="Personal Life Epoch Timeline Scrubber"
+                onChange={(e) => setLifeSlider(Number(e.target.value))}
+                style={{ accentColor: displayCoreColor }}
+                className="w-full h-1.5 rounded-full bg-white/15 appearance-none cursor-pointer focus:outline-none"
+              />
+              <span className="hidden sm:inline font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.18em] text-[#9F95B3]/75">
+                +10 YEARS
+              </span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="pointer-events-auto mx-auto max-w-4xl rounded-2xl bg-[#070412]/68 backdrop-blur-xl border border-white/12 px-4 sm:px-6 py-3.5 shadow-[0_0_32px_rgba(7,3,18,0.72)]">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-2.5">
+              <div className="flex items-center gap-2.5">
+                <span
+                  className="font-[family-name:var(--font-jetbrains-mono)] text-[10px] tracking-[0.26em] uppercase"
+                  style={{ color: displayCoreColor }}
+                >
+                  {epochSnapshot.activeEpoch.id} {"//"}{" "}
+                  {formatYearLabel(epochYear)}
+                </span>
+                <span className="font-[family-name:var(--font-orbitron)] text-[11px] sm:text-xs tracking-[0.16em] text-[#F6F3FE] uppercase">
+                  {epochSnapshot.activeEpoch.eraTitle}
+                </span>
+              </div>
+              <span className="hidden sm:inline font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.22em] text-[#9F95B3]/80 uppercase">
+                CLICK OR DRAG HORIZON TO DISTURB FIELD
+              </span>
+            </div>
+
+            <p className="font-[family-name:var(--font-inter)] text-[11px] sm:text-xs leading-relaxed text-[#D8D0ED]/88 mb-3">
+              {epochSnapshot.activeEpoch.narrative}
+            </p>
+
+            <div className="grid grid-cols-4 gap-2 mb-2">
+              {baseConfig.epochs.map((ep) => {
+                const isCurrent = epochSnapshot.activeEpoch.id === ep.id;
+                return (
+                  <button
+                    key={ep.id}
+                    type="button"
+                    tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
+                    onClick={() => setEpochYear(ep.yearOffset)}
+                    className={`flex flex-col items-start sm:items-center text-left sm:text-center px-2 py-1 rounded-lg border transition-all cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C2B0FF] ${
+                      isCurrent
+                        ? "bg-white/10 border-white/30 text-[#F6F3FE]"
+                        : "bg-transparent border-transparent text-[#9F95B3] hover:text-[#DFD6F7] hover:bg-white/5"
+                    }`}
+                  >
+                    <span
+                      className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] sm:text-[9px] tracking-[0.22em] uppercase"
+                      style={{
+                        color: isCurrent ? displayCoreColor : undefined,
+                      }}
+                    >
+                      {ep.id}
+                    </span>
+                    <span className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.16em] opacity-75">
+                      {ep.yearLabel}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:inline font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.18em] text-[#9F95B3]/75">
+                -10,000 YR
+              </span>
+              <input
+                type="range"
+                min={-10000}
+                max={10000}
+                step={50}
+                value={epochYear}
+                tabIndex={isOpen && !isEnigmaOpen ? 0 : -1}
+                aria-label="Epoch Timeline Scrubber"
+                onChange={(e) => setEpochYear(Number(e.target.value))}
+                style={{ accentColor: displayCoreColor }}
+                className="w-full h-1.5 rounded-full bg-white/15 appearance-none cursor-pointer focus:outline-none"
+              />
+              <span className="hidden sm:inline font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.18em] text-[#9F95B3]/75">
+                +10,000 YR
+              </span>
+            </div>
+          </div>
+        )}
       </footer>
     </section>
   );
