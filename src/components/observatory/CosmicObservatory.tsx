@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import type { User } from "@supabase/supabase-js";
 import ObservatoryNavbar from "./ObservatoryNavbar";
 import RealityConstellation from "./RealityConstellation";
 import RealityInspector from "./RealityInspector";
@@ -12,6 +13,7 @@ import EnigmaCommunion, {
   CrystallizeDivergencePayload,
 } from "./EnigmaCommunion";
 import { cosmicAudio } from "@/lib/cosmicAudio";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 import type { EnigmaEcho } from "./enigmaEngine";
 import {
   DEFAULT_OBSERVATORY_SPECTRUM,
@@ -30,7 +32,10 @@ import {
   purgeCustomMultiverse,
   saveCustomRealities,
   saveEchoHistoryForReality,
+  saveMultiverseState,
   saveObserverProfile,
+  syncSessionWithCloud,
+  upsertCloudMultiverseState,
 } from "@/lib/multiverseStore";
 import type { ObserverProfile, PersonalTimelineBranch } from "@/lib/multiverse/types";
 import type { EnigmaActivityState } from "../gateway/AtmosphericCanvas";
@@ -91,20 +96,131 @@ export default function CosmicObservatory({
   const [observerSession, setObserverSession] = useState<number>(0);
   const [breachSession, setBreachSession] = useState<number>(0);
   const [newlyBornId, setNewlyBornId] = useState<string | null>(null);
+  const [cloudUser, setCloudUser] = useState<User | null>(null);
+  const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<string | null>(null);
 
   const bornTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cloudUserRef = useRef<User | null>(null);
+  const syncedCloudUserIdRef = useRef<string | null>(null);
+  const isMountedRef = useRef<boolean>(true);
 
-  // Hydrate persistent Multiverse Store (custom nodes, echoes, Observer profile) safely after mount
+  const applyPersistedState = useCallback((state: MultiversePersistedState) => {
+    setObserverProfile(state.observerProfile);
+    setCustomNodes(state.customRealities);
+    setCustomLinks(state.customLinks);
+    setEchoHistoryByReality(state.echoHistoryByReality);
+  }, []);
+
+  const pushSnapshotToCloud = useCallback(
+    async (snapshot: MultiversePersistedState) => {
+      const activeUser = cloudUserRef.current;
+      if (!activeUser) return;
+      const result = await upsertCloudMultiverseState(activeUser, snapshot);
+      if (!isMountedRef.current) return;
+      if (result.ok) {
+        setObserverProfile((prev) => ({
+          ...prev,
+          authMode: "supabase",
+          cloudUserId: activeUser.id,
+          email: activeUser.email ?? prev.email,
+          syncedAt: result.syncedAt,
+        }));
+        setCloudSyncStatus(
+          "CLOUD SYNC // ACTIVE — AUTO-SAVED TO SUPABASE POSTGRES"
+        );
+      } else if (result.errorMessage) {
+        setCloudSyncStatus(
+          `CLOUD AUTO-SYNC WARNING: ${result.errorMessage.toUpperCase()}`
+        );
+      }
+    },
+    []
+  );
+
+  // Hydrate persistent Multiverse Store locally and bind real-time Supabase auth listener
   useEffect(() => {
+    isMountedRef.current = true;
     const persisted = loadMultiverseState();
     const rafId = requestAnimationFrame(() => {
-      setObserverProfile(persisted.observerProfile);
-      setCustomNodes(persisted.customRealities);
-      setCustomLinks(persisted.customLinks);
-      setEchoHistoryByReality(persisted.echoHistoryByReality);
+      applyPersistedState(persisted);
     });
-    return () => cancelAnimationFrame(rafId);
-  }, []);
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return () => {
+        isMountedRef.current = false;
+        cancelAnimationFrame(rafId);
+      };
+    }
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        const nextUser = session?.user ?? null;
+
+        if (nextUser) {
+          cloudUserRef.current = nextUser;
+          setCloudUser(nextUser);
+
+          const shouldHydrateCloud =
+            event === "SIGNED_IN" ||
+            event === "INITIAL_SESSION" ||
+            syncedCloudUserIdRef.current !== nextUser.id;
+
+          if (shouldHydrateCloud && syncedCloudUserIdRef.current !== nextUser.id) {
+            syncedCloudUserIdRef.current = nextUser.id;
+            setIsCloudSyncing(true);
+
+            void syncSessionWithCloud(nextUser, loadMultiverseState())
+              .then((res) => {
+                if (!isMountedRef.current) return;
+                applyPersistedState(res.state);
+                setCloudSyncStatus(res.statusMessage);
+                setObserverSession((s) => s + 1);
+                setEnigmaSession((s) => s + 1);
+              })
+              .finally(() => {
+                if (isMountedRef.current) {
+                  setIsCloudSyncing(false);
+                }
+              });
+          }
+          return;
+        }
+
+        cloudUserRef.current = null;
+        setCloudUser(null);
+
+        if (event === "SIGNED_OUT" || syncedCloudUserIdRef.current !== null) {
+          syncedCloudUserIdRef.current = null;
+          const current = loadMultiverseState();
+          if (current.observerProfile.authMode === "supabase") {
+            const revertedProfile: ObserverProfile = {
+              ...current.observerProfile,
+              authMode: "local",
+              cloudUserId: undefined,
+              syncedAt: "",
+            };
+            const updatedState: MultiversePersistedState = {
+              ...current,
+              observerProfile: revertedProfile,
+            };
+            saveMultiverseState(updatedState);
+            setObserverProfile(revertedProfile);
+          }
+          setCloudSyncStatus(
+            "OBSERVER SESSION SEVERED // LOCAL VOID VAULT ACTIVE"
+          );
+        }
+      }
+    );
+
+    return () => {
+      isMountedRef.current = false;
+      cancelAnimationFrame(rafId);
+      authListener.subscription.unsubscribe();
+    };
+  }, [applyPersistedState]);
 
   useEffect(() => {
     return () => {
@@ -195,9 +311,10 @@ export default function CosmicObservatory({
 
   const persistCustomRealities = useCallback(
     (nodesToSave: RealityNode[], linksToSave: SynapticLink[]) => {
-      saveCustomRealities(nodesToSave, linksToSave);
+      const saved = saveCustomRealities(nodesToSave, linksToSave);
+      void pushSnapshotToCloud(saved);
     },
-    []
+    [pushSnapshotToCloud]
   );
 
   const scheduleNewlyBornHighlight = useCallback((nodeId: string) => {
@@ -266,10 +383,57 @@ export default function CosmicObservatory({
   const handleProfileSynchronized = useCallback(
     (nextProfile: ObserverProfile) => {
       setObserverProfile(nextProfile);
-      saveObserverProfile(nextProfile);
+      const saved = saveObserverProfile(nextProfile);
+      void pushSnapshotToCloud(saved);
     },
-    []
+    [pushSnapshotToCloud]
   );
+
+  const handleForceCloudSync = useCallback(async () => {
+    const activeUser = cloudUserRef.current;
+    if (!activeUser) return;
+    setIsCloudSyncing(true);
+    try {
+      const res = await syncSessionWithCloud(
+        activeUser,
+        loadMultiverseState(),
+        { forceCloudPush: true }
+      );
+      if (!isMountedRef.current) return;
+      applyPersistedState(res.state);
+      setCloudSyncStatus(res.statusMessage);
+    } finally {
+      if (isMountedRef.current) {
+        setIsCloudSyncing(false);
+      }
+    }
+  }, [applyPersistedState]);
+
+  const handleSignOut = useCallback(async () => {
+    const supabase = getSupabaseClient();
+    syncedCloudUserIdRef.current = null;
+    cloudUserRef.current = null;
+    if (supabase) {
+      await supabase.auth.signOut().catch(() => undefined);
+    }
+    if (!isMountedRef.current) return;
+    setCloudUser(null);
+    const current = loadMultiverseState();
+    const localProfile: ObserverProfile = {
+      ...current.observerProfile,
+      observerHandle: "GUEST-01",
+      authMode: "local",
+      cloudUserId: undefined,
+      syncedAt: "",
+    };
+    const nextState: MultiversePersistedState = {
+      ...current,
+      observerProfile: localProfile,
+    };
+    saveMultiverseState(nextState);
+    setObserverProfile(localProfile);
+    setCloudSyncStatus("SIGNED OUT // LOCAL VOID VAULT ACTIVE");
+  }, []);
 
   const handleEchoesChange = useCallback(
     (realityKey: string, nextEchoes: EnigmaEcho[]) => {
@@ -277,45 +441,47 @@ export default function CosmicObservatory({
         ...prev,
         [realityKey]: nextEchoes,
       }));
-      saveEchoHistoryForReality(realityKey, nextEchoes);
+      const saved = saveEchoHistoryForReality(realityKey, nextEchoes);
+      void pushSnapshotToCloud(saved);
     },
-    []
+    [pushSnapshotToCloud]
   );
 
   const handleImportArtifact = useCallback(
     (imported: MultiversePersistedState) => {
-      setObserverProfile(imported.observerProfile);
-      setCustomNodes(imported.customRealities);
-      setCustomLinks(imported.customLinks);
-      setEchoHistoryByReality(imported.echoHistoryByReality);
-      setSelectedRealityId(
-        imported.customRealities[0]?.id ?? "omega-01"
-      );
+      applyPersistedState(imported);
+      setSelectedRealityId(imported.customRealities[0]?.id ?? "omega-01");
       setEnigmaSession((s) => s + 1);
+      void pushSnapshotToCloud(imported);
     },
-    []
+    [applyPersistedState, pushSnapshotToCloud]
   );
 
   const handlePurgeMultiverse = useCallback(() => {
     const cleanState = purgeCustomMultiverse();
-    setCustomNodes(cleanState.customRealities);
-    setCustomLinks(cleanState.customLinks);
-    setEchoHistoryByReality(cleanState.echoHistoryByReality);
+    applyPersistedState(cleanState);
     setSelectedRealityId((curr) =>
       REALITY_NODES.some((n) => n.id === curr) ? curr : null
     );
     setHoveredRealityId(null);
     setNewlyBornId(null);
     setEnigmaSession((s) => s + 1);
-  }, []);
+    void pushSnapshotToCloud(cleanState);
+  }, [applyPersistedState, pushSnapshotToCloud]);
 
-  const handleBaselineChange = useCallback((nextBaseline: string) => {
-    setObserverProfile((prev) => {
-      const updated = { ...prev, baselineContext: nextBaseline };
-      saveObserverProfile(updated);
-      return updated;
-    });
-  }, []);
+  const handleBaselineChange = useCallback(
+    (nextBaseline: string) => {
+      const current = loadMultiverseState();
+      const updatedProfile: ObserverProfile = {
+        ...current.observerProfile,
+        baselineContext: nextBaseline,
+      };
+      setObserverProfile(updatedProfile);
+      const saved = saveObserverProfile(updatedProfile);
+      void pushSnapshotToCloud(saved);
+    },
+    [pushSnapshotToCloud]
+  );
 
   const appendOrRotateCustomNode = useCallback(
     (node: RealityNode, link: SynapticLink) => {
@@ -617,11 +783,16 @@ export default function CosmicObservatory({
         key={`observer-${observerSession}`}
         isOpen={isActive && isObserverOpen}
         observerProfile={observerProfile}
+        cloudUser={cloudUser}
+        isCloudSyncing={isCloudSyncing}
+        cloudSyncStatus={cloudSyncStatus}
         customNodes={customNodes}
         allNodes={allNodes}
         echoHistoryByReality={echoHistoryByReality}
         onClose={handleCloseObserver}
         onProfileSynchronized={handleProfileSynchronized}
+        onForceCloudSync={handleForceCloudSync}
+        onSignOut={handleSignOut}
         onImportArtifact={handleImportArtifact}
         onPurgeMultiverse={handlePurgeMultiverse}
       />

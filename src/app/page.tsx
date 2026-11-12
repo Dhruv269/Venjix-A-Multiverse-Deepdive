@@ -65,10 +65,19 @@ export default function VenjixCosmicGatewayPage() {
       alreadyRevealed = false;
     }
 
-    if (prefersReducedMotion || alreadyRevealed) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isAuthRedirect =
+      urlParams.has("code") ||
+      window.location.hash.includes("access_token=");
+
+    if (prefersReducedMotion || alreadyRevealed || isAuthRedirect) {
       const rafId = requestAnimationFrame(() => {
         setBypassOpening(true);
         setOpeningStage(4);
+        if (isAuthRedirect) {
+          setWarpProgress(1);
+          setIsObservatoryActive(true);
+        }
       });
       return () => cancelAnimationFrame(rafId);
     }

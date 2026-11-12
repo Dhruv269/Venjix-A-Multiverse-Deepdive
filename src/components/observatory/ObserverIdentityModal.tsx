@@ -1,38 +1,65 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import type { EnigmaEcho } from "./enigmaEngine";
 import type { RealityNode } from "./realityData";
 import type { ObserverProfile } from "@/lib/multiverse/types";
+import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabaseClient";
 import {
   MultiversePersistedState,
-  authenticateAndSyncObserver,
   exportMultiverseArtifactJson,
-  isSupabaseConfigured,
   loadMultiverseState,
   parseImportedMultiverseArtifact,
+  saveLocalObserverPassport,
 } from "@/lib/multiverseStore";
+
+type AuthMethodTab = "password" | "magic_link";
+type PasswordSubMode = "sign_in" | "sign_up";
 
 interface ObserverIdentityModalProps {
   isOpen: boolean;
   observerProfile: ObserverProfile;
+  cloudUser: User | null;
+  isCloudSyncing: boolean;
+  cloudSyncStatus: string | null;
   customNodes: RealityNode[];
   allNodes: RealityNode[];
   echoHistoryByReality: Record<string, EnigmaEcho[]>;
   onClose: () => void;
   onProfileSynchronized: (nextProfile: ObserverProfile) => void;
+  onForceCloudSync: () => Promise<void>;
+  onSignOut: () => Promise<void>;
   onImportArtifact: (imported: MultiversePersistedState) => void;
   onPurgeMultiverse: () => void;
+}
+
+function formatSyncTimestamp(iso: string | undefined): string {
+  if (!iso) return "PENDING";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 export default function ObserverIdentityModal({
   isOpen,
   observerProfile,
+  cloudUser,
+  isCloudSyncing,
+  cloudSyncStatus,
   customNodes,
   allNodes,
   echoHistoryByReality,
   onClose,
   onProfileSynchronized,
+  onForceCloudSync,
+  onSignOut,
   onImportArtifact,
   onPurgeMultiverse,
 }: ObserverIdentityModalProps) {
@@ -43,21 +70,28 @@ export default function ObserverIdentityModal({
     observerProfile.baselineContext
   );
   const [emailInput, setEmailInput] = useState<string>(
-    observerProfile.email ?? ""
+    cloudUser?.email ?? observerProfile.email ?? ""
   );
-  const [passkeyInput, setPasskeyInput] = useState<string>("");
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [passwordInput, setPasswordInput] = useState<string>("");
+  const [authTab, setAuthTab] = useState<AuthMethodTab>("password");
+  const [passwordMode, setPasswordMode] = useState<PasswordSubMode>("sign_in");
+  const [oauthLoading, setOauthLoading] = useState<"github" | "google" | null>(
+    null
+  );
+  const [isBusy, setIsBusy] = useState<boolean>(false);
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<"info" | "warn">("info");
   const [confirmPurge, setConfirmPurge] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isMountedRef = useRef<boolean>(true);
-  const isSyncingRef = useRef<boolean>(false);
+  const isBusyRef = useRef<boolean>(false);
+
+  const effectiveBusy = isBusy || isCloudSyncing || oauthLoading !== null;
 
   useEffect(() => {
-    isSyncingRef.current = isSyncing;
-  }, [isSyncing]);
+    isBusyRef.current = effectiveBusy;
+  }, [effectiveBusy]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -69,7 +103,7 @@ export default function ObserverIdentityModal({
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isSyncingRef.current) {
+      if (e.key === "Escape" && !isBusyRef.current) {
         e.preventDefault();
         onClose();
       }
@@ -79,8 +113,8 @@ export default function ObserverIdentityModal({
   }, [isOpen, onClose]);
 
   const supabaseEnabled = isSupabaseConfigured();
+  const isAuthenticated = Boolean(cloudUser);
 
-  // Telemetry summary computed cleanly from live Observatory state
   const telemetrySummary = useMemo(() => {
     let bestFulfillmentNode: RealityNode | null = null;
     let bestFulfillmentScore = -1;
@@ -123,37 +157,239 @@ export default function ObserverIdentityModal({
     };
   }, [allNodes, customNodes.length, echoHistoryByReality]);
 
-  const handleSynchronize = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (isSyncing) return;
+  const commitDraftIdentityBeforeAuth = () => {
+    const saved = saveLocalObserverPassport({
+      handle: handleInput,
+      baselineContext: baselineInput,
+      email: emailInput.trim() || undefined,
+    });
+    onProfileSynchronized(saved);
+    return saved;
+  };
 
-    setIsSyncing(true);
+  const handleSaveProfileOnly = async () => {
+    if (effectiveBusy) return;
+    setIsBusy(true);
     setStatusFeedback(null);
 
     try {
-      const snapshot = loadMultiverseState();
-      const result = await authenticateAndSyncObserver({
-        handle: handleInput,
-        baselineContext: baselineInput,
-        email: emailInput,
-        passkey: passkeyInput,
-        stateSnapshot: snapshot,
-      });
-
+      const updated = commitDraftIdentityBeforeAuth();
+      if (isAuthenticated) {
+        await onForceCloudSync();
+      }
       if (!isMountedRef.current) return;
-      onProfileSynchronized(result.profile);
-      setHandleInput(result.profile.observerHandle);
-      setBaselineInput(result.profile.baselineContext);
+      setHandleInput(updated.observerHandle);
+      setBaselineInput(updated.baselineContext);
       setStatusTone("info");
-      setStatusFeedback(result.statusMessage);
-      setPasskeyInput("");
-    } catch {
-      if (!isMountedRef.current) return;
-      setStatusTone("warn");
-      setStatusFeedback("OBSERVER SYNCHRONIZATION INTERRUPTED // RETRYING LOCAL VAULT");
+      setStatusFeedback(
+        isAuthenticated
+          ? "OBSERVER HANDLE & BASELINE PUSHED TO SUPABASE POSTGRES"
+          : "LOCAL OBSERVER PASSPORT UPDATED IN PERSISTENT VAULT"
+      );
     } finally {
       if (isMountedRef.current) {
-        setIsSyncing(false);
+        setIsBusy(false);
+      }
+    }
+  };
+
+  const handleEmailAuthSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (effectiveBusy) return;
+
+    const cleanEmail = emailInput.trim();
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setStatusTone("warn");
+      setStatusFeedback("ENTER A VALID OBSERVER EMAIL ADDRESS");
+      return;
+    }
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setStatusTone("warn");
+      setStatusFeedback(
+        "SUPABASE CLIENT UNAVAILABLE // CHECK .ENV.LOCAL KEYS"
+      );
+      return;
+    }
+
+    const draftProfile = commitDraftIdentityBeforeAuth();
+    setIsBusy(true);
+    setStatusFeedback(null);
+
+    try {
+      if (authTab === "magic_link") {
+        const { error } = await supabase.auth.signInWithOtp({
+          email: cleanEmail,
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: {
+              observer_handle: draftProfile.observerHandle,
+            },
+          },
+        });
+
+        if (!isMountedRef.current) return;
+        if (error) {
+          setStatusTone("warn");
+          setStatusFeedback(`MAGIC LINK FAILED // ${error.message.toUpperCase()}`);
+          return;
+        }
+
+        setStatusTone("info");
+        setStatusFeedback(
+          `MAGIC LINK DISPATCHED TO ${cleanEmail.toUpperCase()} // CHECK INBOX TO ENTER`
+        );
+        return;
+      }
+
+      if (passwordInput.length < 6) {
+        setStatusTone("warn");
+        setStatusFeedback("PASSWORD MUST BE AT LEAST 6 CHARACTERS");
+        return;
+      }
+
+      if (passwordMode === "sign_in") {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: passwordInput,
+        });
+
+        if (!isMountedRef.current) return;
+        if (error) {
+          setStatusTone("warn");
+          setStatusFeedback(`AUTH REJECTED // ${error.message.toUpperCase()}`);
+          return;
+        }
+
+        setPasswordInput("");
+        setStatusTone("info");
+        setStatusFeedback(
+          "CREDENTIALS VERIFIED // HYDRATING CLOUD MULTIVERSE..."
+        );
+      } else {
+        const { data, error } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password: passwordInput,
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: {
+              observer_handle: draftProfile.observerHandle,
+            },
+          },
+        });
+
+        if (!isMountedRef.current) return;
+        if (error) {
+          setStatusTone("warn");
+          setStatusFeedback(`ACCOUNT CREATION FAILED // ${error.message.toUpperCase()}`);
+          return;
+        }
+
+        setPasswordInput("");
+        if (data.session) {
+          setStatusTone("info");
+          setStatusFeedback(
+            "OBSERVER ACCOUNT CREATED // MIGRATING TIMELINES TO POSTGRES..."
+          );
+        } else {
+          setStatusTone("info");
+          setStatusFeedback(
+            `ACCOUNT CREATED // VERIFY CONFIRMATION LINK SENT TO ${cleanEmail.toUpperCase()}`
+          );
+        }
+      }
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      setStatusTone("warn");
+      setStatusFeedback(
+        `SUPABASE AUTH ERROR // ${
+          err instanceof Error ? err.message.toUpperCase() : "UNKNOWN ERROR"
+        }`
+      );
+    } finally {
+      if (isMountedRef.current) {
+        setIsBusy(false);
+      }
+    }
+  };
+
+  const handleOAuthLogin = async (provider: "github" | "google") => {
+    if (effectiveBusy) return;
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setStatusTone("warn");
+      setStatusFeedback(
+        "SUPABASE CLIENT UNAVAILABLE // CHECK .ENV.LOCAL KEYS"
+      );
+      return;
+    }
+
+    commitDraftIdentityBeforeAuth();
+    setOauthLoading(provider);
+    setStatusFeedback(null);
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+
+      if (error && isMountedRef.current) {
+        setOauthLoading(null);
+        setStatusTone("warn");
+        setStatusFeedback(
+          `${provider.toUpperCase()} OAUTH ERROR // ${error.message.toUpperCase()}`
+        );
+      }
+    } catch (err) {
+      if (isMountedRef.current) {
+        setOauthLoading(null);
+        setStatusTone("warn");
+        setStatusFeedback(
+          `${provider.toUpperCase()} OAUTH FAILED // ${
+            err instanceof Error ? err.message.toUpperCase() : "NETWORK ERROR"
+          }`
+        );
+      }
+    }
+  };
+
+  const handleForceSync = async () => {
+    if (effectiveBusy || !isAuthenticated) return;
+    setIsBusy(true);
+    setStatusFeedback(null);
+    try {
+      commitDraftIdentityBeforeAuth();
+      await onForceCloudSync();
+      if (!isMountedRef.current) return;
+      setStatusTone("info");
+      setStatusFeedback(
+        "SUPABASE POSTGRES RESYNC COMPLETE // ALL TIMELINES PRESERVED"
+      );
+    } finally {
+      if (isMountedRef.current) {
+        setIsBusy(false);
+      }
+    }
+  };
+
+  const handleSignOutClick = async () => {
+    if (effectiveBusy || !isAuthenticated) return;
+    setIsBusy(true);
+    setStatusFeedback(null);
+    try {
+      await onSignOut();
+      if (!isMountedRef.current) return;
+      setHandleInput("GUEST-01");
+      setPasswordInput("");
+      setStatusTone("info");
+      setStatusFeedback("CLOUD IDENTITY SEVERED // RETURNED TO LOCAL VOID VAULT");
+    } finally {
+      if (isMountedRef.current) {
+        setIsBusy(false);
       }
     }
   };
@@ -209,10 +445,15 @@ export default function ObserverIdentityModal({
     onPurgeMultiverse();
     setConfirmPurge(false);
     setStatusTone("info");
-    setStatusFeedback("CUSTOM NODES & ECHO LOGS PURGED // CANVAS RESET");
+    setStatusFeedback(
+      isAuthenticated
+        ? "CUSTOM NODES & ECHO LOGS PURGED LOCALLY & IN CLOUD"
+        : "CUSTOM NODES & ECHO LOGS PURGED // CANVAS RESET"
+    );
   };
 
   const tabIndex = isOpen ? 0 : -1;
+  const activeFeedback = statusFeedback || cloudSyncStatus;
 
   return (
     <section
@@ -225,7 +466,7 @@ export default function ObserverIdentityModal({
           : "opacity-0 pointer-events-none scale-98"
       }`}
     >
-      <div className="relative w-full max-w-3xl my-auto rounded-3xl bg-[#080414]/88 border border-[#C2B0FF]/25 px-5 sm:px-8 py-6 sm:py-7 shadow-[0_0_72px_rgba(113,54,217,0.34)]">
+      <div className="relative w-full max-w-3xl my-auto rounded-3xl bg-[#080414]/90 border border-[#C2B0FF]/25 px-5 sm:px-8 py-6 sm:py-7 shadow-[0_0_72px_rgba(113,54,217,0.34)]">
         {/* Specular Top Starlight Rim */}
         <div
           aria-hidden="true"
@@ -235,16 +476,30 @@ export default function ObserverIdentityModal({
         {/* Console Header */}
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
-            <div className="flex flex-wrap items-center gap-2 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.26em] text-[#C2B0FF] uppercase">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse shadow-[0_0_8px_#38BDF8]" />
+            <div className="flex flex-wrap items-center gap-2 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.24em] text-[#C2B0FF] uppercase">
+              <span
+                className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                  isAuthenticated
+                    ? "bg-[#34D399] shadow-[0_0_10px_#34D399]"
+                    : "bg-[#38BDF8] shadow-[0_0_8px_#38BDF8]"
+                }`}
+              />
               <span>
-                OBSERVER IDENTITY SYNCHRONIZATION {"//"} {observerProfile.observerHandle}
+                OBSERVER IDENTITY {"//"} {observerProfile.observerHandle}
               </span>
-              <span className="px-2 py-0.5 rounded-full border border-[#C2B0FF]/30 bg-[#0D0720]/70 text-[8px] text-[#38BDF8]">
-                {observerProfile.authMode === "supabase"
-                  ? "CLOUD LOCKED"
+              <span
+                className={`px-2 py-0.5 rounded-full border text-[8px] ${
+                  isAuthenticated
+                    ? "border-[#34D399]/45 bg-[#052E24]/60 text-[#34D399]"
+                    : supabaseEnabled
+                      ? "border-[#38BDF8]/35 bg-[#0D0720]/70 text-[#38BDF8]"
+                      : "border-[#C2B0FF]/30 bg-[#0D0720]/70 text-[#C2B0FF]"
+                }`}
+              >
+                {isAuthenticated
+                  ? "CLOUD SYNC // ACTIVE"
                   : supabaseEnabled
-                    ? "CLOUD READY"
+                    ? "SUPABASE READY"
                     : "VOID VAULT"}
               </span>
             </div>
@@ -256,7 +511,7 @@ export default function ObserverIdentityModal({
           <button
             type="button"
             tabIndex={tabIndex}
-            disabled={isSyncing}
+            disabled={effectiveBusy}
             onClick={onClose}
             className="shrink-0 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.2em] text-[#9F95B3] hover:text-[#F6F3FE] uppercase cursor-pointer disabled:opacity-40"
           >
@@ -309,9 +564,9 @@ export default function ObserverIdentityModal({
           className="h-px w-full bg-gradient-to-r from-transparent via-[#C2B0FF]/35 to-transparent mb-5"
         />
 
-        {/* Identity & Authentication Form */}
-        <form onSubmit={handleSynchronize} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        {/* Shared Editable Observer Handle & Life Baseline */}
+        <div className="space-y-3.5 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-end">
             <div>
               <label
                 htmlFor="venjix-observer-handle"
@@ -323,7 +578,7 @@ export default function ObserverIdentityModal({
                 id="venjix-observer-handle"
                 type="text"
                 tabIndex={tabIndex}
-                disabled={isSyncing}
+                disabled={effectiveBusy}
                 value={handleInput}
                 onChange={(e) => setHandleInput(e.target.value)}
                 placeholder="GUEST-01"
@@ -332,27 +587,18 @@ export default function ObserverIdentityModal({
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="venjix-observer-email"
-                className="block font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.22em] text-[#9F95B3]/90 uppercase mb-1.5"
-              >
-                02 {"//"} NEURAL MAIL (OPTIONAL CLOUD SYNC)
-              </label>
-              <input
-                id="venjix-observer-email"
-                type="email"
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
                 tabIndex={tabIndex}
-                disabled={isSyncing}
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                placeholder={
-                  supabaseEnabled
-                    ? "observer@domain.com"
-                    : "optional (local passport active)"
-                }
-                className="w-full rounded-xl bg-[#0D0720]/75 border border-[#C2B0FF]/20 focus:border-[#38BDF8]/70 px-3.5 py-2 font-[family-name:var(--font-inter)] text-xs text-[#F6F3FE] placeholder:text-[#9F95B3]/40 focus:outline-none disabled:opacity-50"
-              />
+                disabled={effectiveBusy}
+                onClick={handleSaveProfileOnly}
+                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[#120A2A]/80 hover:bg-[#1E1245] border border-[#C2B0FF]/30 hover:border-[#F6F3FE]/70 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.18em] text-[#E9E2F5] uppercase transition-all cursor-pointer disabled:opacity-45"
+              >
+                {isAuthenticated
+                  ? "[ UPDATE HANDLE & BASELINE ]"
+                  : "[ SAVE LOCAL HANDLE & BASELINE ]"}
+              </button>
             </div>
           </div>
 
@@ -361,72 +607,268 @@ export default function ObserverIdentityModal({
               htmlFor="venjix-observer-baseline"
               className="block font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.22em] text-[#38BDF8]/90 uppercase mb-1.5"
             >
-              03 {"//"} DEFAULT REALITY BASELINE CONTEXT (AUTO-FILLS TIMELINE FORGE)
+              02 {"//"} DEFAULT REALITY BASELINE CONTEXT (AUTO-FILLS TIMELINE FORGE)
             </label>
             <textarea
               id="venjix-observer-baseline"
               rows={2}
               tabIndex={tabIndex}
-              disabled={isSyncing}
+              disabled={effectiveBusy}
               value={baselineInput}
               onChange={(e) => setBaselineInput(e.target.value)}
               placeholder="e.g., 18-year-old CS engineering student building software & AI products"
               className="w-full rounded-xl bg-[#0D0720]/75 border border-[#38BDF8]/25 focus:border-[#38BDF8]/75 px-3.5 py-2 font-[family-name:var(--font-inter)] text-xs sm:text-sm text-[#F6F3FE] placeholder:text-[#9F95B3]/40 focus:outline-none resize-none disabled:opacity-50"
             />
           </div>
+        </div>
 
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="flex-1 min-w-[200px]">
-              <label
-                htmlFor="venjix-observer-passkey"
-                className="block font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.22em] text-[#9F95B3]/85 uppercase mb-1.5"
-              >
-                04 {"//"} PASSKEY TOKEN{" "}
-                {observerProfile.passportSignature
-                  ? `(${observerProfile.passportSignature})`
-                  : ""}
-              </label>
-              <input
-                id="venjix-observer-passkey"
-                type="password"
-                tabIndex={tabIndex}
-                disabled={isSyncing}
-                value={passkeyInput}
-                onChange={(e) => setPasskeyInput(e.target.value)}
-                placeholder="Min 6 chars for Supabase cloud or local signature..."
-                className="w-full rounded-xl bg-[#0D0720]/75 border border-[#C2B0FF]/20 focus:border-[#F6F3FE]/65 px-3.5 py-2 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[#F6F3FE] placeholder:text-[#9F95B3]/40 focus:outline-none disabled:opacity-50"
-              />
+        {/* ------------------------------------------------------------------
+            AUTHENTICATED CLOUD VAULT VIEW vs. MULTI-PROVIDER AUTH PORTAL
+            ------------------------------------------------------------------ */}
+        {isAuthenticated && cloudUser ? (
+          <div className="rounded-2xl bg-[linear-gradient(135deg,rgba(8,29,29,0.55)_0%,rgba(12,7,28,0.88)_100%)] border border-[#34D399]/35 p-4 sm:p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-[family-name:var(--font-jetbrains-mono)] text-[10px] tracking-[0.22em] text-[#34D399] uppercase">
+                <span className="w-2 h-2 rounded-full bg-[#34D399] animate-pulse shadow-[0_0_10px_#34D399]" />
+                <span>CLOUD SYNC {"//"} ACTIVE — SUPABASE POSTGRES</span>
+              </div>
+              <span className="font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.16em] text-[#9F95B3]">
+                SYNCED: {formatSyncTimestamp(observerProfile.syncedAt)}
+              </span>
             </div>
 
-            <button
-              type="submit"
-              tabIndex={tabIndex}
-              disabled={isSyncing}
-              className="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#7136D9]/35 hover:bg-[#7136D9]/55 border border-[#C2B0FF]/55 hover:border-[#F6F3FE]/85 font-[family-name:var(--font-jetbrains-mono)] text-[10px] tracking-[0.2em] text-[#F6F3FE] uppercase shadow-[0_0_24px_rgba(113,54,217,0.34)] transition-all cursor-pointer disabled:opacity-50"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse" />
-              <span>
-                {isSyncing
-                  ? "SYNCHRONIZING..."
-                  : "[ SYNCHRONIZE IDENTITY -> ]"}
-              </span>
-            </button>
-          </div>
-        </form>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="rounded-xl bg-[#04030A]/75 border border-[#C2B0FF]/16 px-3.5 py-2.5">
+                <div className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.20em] text-[#9F95B3]/80 uppercase">
+                  AUTHENTICATED OBSERVER EMAIL
+                </div>
+                <div className="mt-1 font-[family-name:var(--font-inter)] text-xs sm:text-sm text-[#F6F3FE] truncate">
+                  {cloudUser.email || observerProfile.email || "OAuth Verified Identity"}
+                </div>
+              </div>
 
-        {statusFeedback && (
+              <div className="rounded-xl bg-[#04030A]/75 border border-[#C2B0FF]/16 px-3.5 py-2.5">
+                <div className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.20em] text-[#9F95B3]/80 uppercase">
+                  SUPABASE OBSERVER UID
+                </div>
+                <div className="mt-1 font-[family-name:var(--font-jetbrains-mono)] text-[10px] sm:text-[11px] text-[#7DD3FC] truncate">
+                  UID: {cloudUser.id}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+              <button
+                type="button"
+                tabIndex={tabIndex}
+                disabled={effectiveBusy}
+                onClick={handleForceSync}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#0284C7]/25 hover:bg-[#0284C7]/45 border border-[#38BDF8]/55 hover:border-[#F6F3FE]/85 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.18em] text-[#F6F3FE] uppercase shadow-[0_0_20px_rgba(56,189,248,0.22)] transition-all cursor-pointer disabled:opacity-50"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse" />
+                <span>
+                  {effectiveBusy ? "SYNCING POSTGRES..." : "[ FORCE CLOUD SYNC NOW ]"}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                tabIndex={tabIndex}
+                disabled={effectiveBusy}
+                onClick={handleSignOutClick}
+                className="px-4 py-2 rounded-full bg-[#FB7185]/12 hover:bg-[#FB7185]/25 border border-[#FB7185]/40 hover:border-[#FB7185]/80 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.18em] text-[#FB7185] hover:text-[#FFFFFF] uppercase transition-all cursor-pointer disabled:opacity-50"
+              >
+                [ SIGN OUT {"//"} SEVER IDENTITY ]
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-[#0B061B]/75 border border-[#C2B0FF]/20 p-4 sm:p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.22em] text-[#C2B0FF] uppercase">
+                03 {"//"} SUPABASE CLOUD AUTHENTICATION PORTAL
+              </span>
+
+              {/* Mode Switcher: Email+Password vs Magic Link */}
+              <div className="inline-flex rounded-full bg-[#05030C] border border-[#C2B0FF]/20 p-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[8px] sm:text-[9px] tracking-[0.16em] uppercase">
+                <button
+                  type="button"
+                  tabIndex={tabIndex}
+                  onClick={() => {
+                    setAuthTab("password");
+                    setStatusFeedback(null);
+                  }}
+                  className={`px-3 py-1 rounded-full transition-colors cursor-pointer ${
+                    authTab === "password"
+                      ? "bg-[#7136D9]/45 text-[#FFFFFF]"
+                      : "text-[#9F95B3] hover:text-[#F6F3FE]"
+                  }`}
+                >
+                  EMAIL + PASSWORD
+                </button>
+                <button
+                  type="button"
+                  tabIndex={tabIndex}
+                  onClick={() => {
+                    setAuthTab("magic_link");
+                    setStatusFeedback(null);
+                  }}
+                  className={`px-3 py-1 rounded-full transition-colors cursor-pointer ${
+                    authTab === "magic_link"
+                      ? "bg-[#0284C7]/45 text-[#FFFFFF]"
+                      : "text-[#9F95B3] hover:text-[#F6F3FE]"
+                  }`}
+                >
+                  MAGIC LINK
+                </button>
+              </div>
+            </div>
+
+            {/* 1-Click OAuth Providers: GitHub & Google */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                tabIndex={tabIndex}
+                disabled={effectiveBusy || !supabaseEnabled}
+                onClick={() => handleOAuthLogin("github")}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#05030C]/90 hover:bg-[#140B2E] border border-[#C2B0FF]/30 hover:border-[#F6F3FE]/75 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.18em] text-[#F6F3FE] uppercase transition-all cursor-pointer disabled:opacity-45"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C2B0FF]" />
+                <span>
+                  {oauthLoading === "github"
+                    ? "REDIRECTING GITHUB..."
+                    : "[ CONTINUE WITH GITHUB ]"}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                tabIndex={tabIndex}
+                disabled={effectiveBusy || !supabaseEnabled}
+                onClick={() => handleOAuthLogin("google")}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#05030C]/90 hover:bg-[#0B1C33] border border-[#38BDF8]/35 hover:border-[#38BDF8]/80 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.18em] text-[#E9E2F5] hover:text-[#FFFFFF] uppercase transition-all cursor-pointer disabled:opacity-45"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8]" />
+                <span>
+                  {oauthLoading === "google"
+                    ? "REDIRECTING GOOGLE..."
+                    : "[ CONTINUE WITH GOOGLE ]"}
+                </span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 text-[8px] font-[family-name:var(--font-jetbrains-mono)] tracking-[0.26em] text-[#9F95B3]/60 uppercase">
+              <span className="flex-1 h-px bg-[#C2B0FF]/15" />
+              <span>OR NEURAL MAIL CREDENTIALS</span>
+              <span className="flex-1 h-px bg-[#C2B0FF]/15" />
+            </div>
+
+            {/* Email + Password OR Magic Link Form */}
+            <form onSubmit={handleEmailAuthSubmit} className="space-y-3">
+              {authTab === "password" && (
+                <div className="flex items-center justify-between gap-2 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.18em] uppercase">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      tabIndex={tabIndex}
+                      onClick={() => setPasswordMode("sign_in")}
+                      className={`pb-0.5 border-b transition-colors cursor-pointer ${
+                        passwordMode === "sign_in"
+                          ? "border-[#C2B0FF] text-[#F6F3FE]"
+                          : "border-transparent text-[#9F95B3]/70 hover:text-[#E9E2F5]"
+                      }`}
+                    >
+                      SIGN IN
+                    </button>
+                    <span className="text-[#9F95B3]/40">/</span>
+                    <button
+                      type="button"
+                      tabIndex={tabIndex}
+                      onClick={() => setPasswordMode("sign_up")}
+                      className={`pb-0.5 border-b transition-colors cursor-pointer ${
+                        passwordMode === "sign_up"
+                          ? "border-[#38BDF8] text-[#38BDF8]"
+                          : "border-transparent text-[#9F95B3]/70 hover:text-[#E9E2F5]"
+                      }`}
+                    >
+                      CREATE OBSERVER ACCOUNT
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div
+                className={`grid grid-cols-1 ${
+                  authTab === "password" ? "sm:grid-cols-2" : ""
+                } gap-3`}
+              >
+                <input
+                  id="venjix-observer-email"
+                  aria-label="Observer Email"
+                  type="email"
+                  tabIndex={tabIndex}
+                  disabled={effectiveBusy}
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="observer@domain.com"
+                  className="w-full rounded-xl bg-[#05030C]/90 border border-[#C2B0FF]/25 focus:border-[#38BDF8]/75 px-3.5 py-2.5 font-[family-name:var(--font-inter)] text-xs sm:text-sm text-[#F6F3FE] placeholder:text-[#9F95B3]/40 focus:outline-none disabled:opacity-50"
+                />
+
+                {authTab === "password" && (
+                  <input
+                    id="venjix-observer-passkey"
+                    aria-label="Observer Password"
+                    type="password"
+                    tabIndex={tabIndex}
+                    disabled={effectiveBusy}
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="Password (min 6 characters)..."
+                    className="w-full rounded-xl bg-[#05030C]/90 border border-[#C2B0FF]/25 focus:border-[#F6F3FE]/70 px-3.5 py-2.5 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[#F6F3FE] placeholder:text-[#9F95B3]/40 focus:outline-none disabled:opacity-50"
+                  />
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+                <span className="font-[family-name:var(--font-jetbrains-mono)] text-[8px] tracking-[0.16em] text-[#9F95B3]/75 uppercase">
+                  GUEST TIMELINES MERGE AUTOMATICALLY UPON SIGN-IN
+                </span>
+
+                <button
+                  type="submit"
+                  tabIndex={tabIndex}
+                  disabled={effectiveBusy || !supabaseEnabled}
+                  className="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#7136D9]/40 hover:bg-[#7136D9]/60 border border-[#C2B0FF]/55 hover:border-[#F6F3FE]/85 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.18em] text-[#F6F3FE] uppercase shadow-[0_0_24px_rgba(113,54,217,0.34)] transition-all cursor-pointer disabled:opacity-45"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse" />
+                  <span>
+                    {effectiveBusy
+                      ? "CONNECTING..."
+                      : authTab === "magic_link"
+                        ? "[ SEND MAGIC LINK -> ]"
+                        : passwordMode === "sign_in"
+                          ? "[ SIGN IN // CLOUD SYNC -> ]"
+                          : "[ CREATE OBSERVER ACCOUNT -> ]"}
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {activeFeedback && (
           <p
             role="status"
-            className={`mt-3 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.18em] uppercase ${
+            className={`mt-3 font-[family-name:var(--font-jetbrains-mono)] text-[9px] sm:text-[10px] tracking-[0.16em] uppercase ${
               statusTone === "warn" ? "text-[#FB7185]" : "text-[#38BDF8]"
             }`}
           >
-            {statusFeedback}
+            {activeFeedback}
           </p>
         )}
 
         {/* Artifact Export / Import & Multiverse Reset Footer */}
-        <div className="mt-6 pt-4 border-t border-[#C2B0FF]/15 flex flex-wrap items-center justify-between gap-2.5">
+        <div className="mt-5 pt-4 border-t border-[#C2B0FF]/15 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -460,7 +902,9 @@ export default function ObserverIdentityModal({
               <button
                 type="button"
                 tabIndex={tabIndex}
-                disabled={customNodes.length === 0 && telemetrySummary.totalEchoes === 0}
+                disabled={
+                  customNodes.length === 0 && telemetrySummary.totalEchoes === 0
+                }
                 onClick={() => setConfirmPurge(true)}
                 className="px-3.5 py-2 rounded-full bg-[#FB7185]/10 hover:bg-[#FB7185]/22 border border-[#FB7185]/35 hover:border-[#FB7185]/70 font-[family-name:var(--font-jetbrains-mono)] text-[9px] tracking-[0.18em] text-[#FB7185] uppercase transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
               >
@@ -492,4 +936,3 @@ export default function ObserverIdentityModal({
     </section>
   );
 }
-
